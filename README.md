@@ -46,13 +46,23 @@ A cash deposit hits the `transactions` collection:
     "pattern_match": "structuring",
     "flags": ["STRUCT-001", "THRESH-001", "VELOCITY-002"],
     "summary": "Cash deposit of $9,800 is just below the $10,000 CTR reporting threshold. Account acc_0028 has made 4 similar sub-threshold deposits within 48 hours totaling $38,400. Pattern is consistent with structuring to avoid BSA reporting requirements.",
+    "evidence": [
+      {"fact": "Amount $9,800 is 98% of $10,000 CTR threshold", "source": "rules", "weight": "strong"},
+      {"fact": "4 similar deposits in 48h totaling $38,400", "source": "transaction_history", "weight": "strong"},
+      {"fact": "Account is Panama-based trust with enhanced due diligence", "source": "entity_profile", "weight": "moderate"},
+      {"fact": "All deposits via Miami branch - same channel, same city", "source": "transaction_history", "weight": "moderate"}
+    ],
+    "recommended_actions": ["hold", "escalate", "review_counterparty"],
+    "confidence": 0.91,
+    "related_entities_flagged": ["acc_0028"],
+    "investigation_depth": "deep",
     "analyzed_at": "2024-03-15T14:23:07Z",
     "version": 1
   }
 }
 ```
 
-No code wrote that. An Atlas Trigger fired, AgentField reasoned over the account's history, applied compliance rules, and enriched the document in place. The account's risk profile was updated. Four related transactions were flagged for re-analysis.
+No code wrote that. An Atlas Trigger fired. AgentField triaged the deposit, flagged the near-threshold amount, investigated the account's history and counterparty patterns, applied compliance rules, and enriched the document in place — with an evidence chain explaining exactly why. The account's risk profile was updated. Four related transactions were flagged for re-analysis.
 
 **The database initiated intelligence. The application did nothing.**
 
@@ -99,12 +109,13 @@ The architecture has three parts:
 
 1. **Atlas Trigger** fires and passes the full document to AgentField
 2. **Domain resolution** — the collection name maps to a domain config document in MongoDB
-3. **Context assembly** — entity profile, transaction history, and relevant rules are loaded in parallel
-4. **LLM reasoning** — the domain-specific prompt, full context, and rule set produce a structured `DocumentIntelligence` judgment
-5. **In-place enrichment** — `_intelligence` is written back to the source document
-6. **Policy evaluation** — plain-English policies are checked against the enrichment (e.g., *"Flag wire transfers over $100K from accounts with incomplete KYC"*)
-7. **Cascade** — if risk exceeds the threshold, linked entity profiles are updated and related unenriched documents are re-analyzed
-8. **Audit trail** — every decision is logged to `reaction_timeline`
+3. **Triage** — quick LLM assessment: is this document worth investigating? Amount anomalies, narrative red flags, jurisdiction signals
+4. **Deep investigation** (if triage warrants) — entity profile, counterparty context, transaction history, and relevant rules loaded in parallel
+5. **LLM reasoning** — the domain-specific prompt, full context, triage signals, and rule set produce a structured `DocumentIntelligence` judgment with evidence chain
+6. **In-place enrichment** — `_intelligence` is written back to the source document
+7. **Policy evaluation** — plain-English policies are checked against the enrichment
+8. **Cascade** — if risk exceeds the threshold, linked entity profiles are updated, related documents are re-analyzed, and a network-level intelligence summary is generated
+9. **Audit trail** — every decision, including triage priority and investigation depth, is logged to `reaction_timeline`
 
 ---
 
@@ -355,7 +366,9 @@ Built on [AgentField](https://github.com/Agent-Field/agentfield) — a framework
 |---|---|
 | `load_domain_config` | Load domain config from MongoDB — all behavior derives from this |
 | `load_entity_context` | Fetch entity profile (account, customer, device, patient) |
+| `find_counterparty_context` | Follow the money — load counterparty entity and their recent transactions |
 | `find_related_documents` | Load historical documents for context |
+| `find_recent_high_risk` | Scan for recently flagged documents to detect network patterns |
 | `load_rules` | Retrieve relevant domain rules via text search |
 | `enrich_document` | Write `_intelligence` back into the source document |
 | `load_active_policies` | Load domain-scoped policies (plain English, not code) |

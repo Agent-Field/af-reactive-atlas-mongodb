@@ -22,7 +22,12 @@
     "risk_category": "one of: low, medium, high, critical",
     "pattern_match": "detected pattern name or 'none'",
     "flags": "list of applicable rule IDs from the rules collection",
-    "summary": "2-3 sentence executive summary"
+    "summary": "2-3 sentence executive summary",
+    "evidence": "list of {fact, source, weight} objects supporting the assessment",
+    "recommended_actions": "list of actions: hold, escalate, review_counterparty, enhanced_monitoring, clear, investigate_network",
+    "confidence": "float 0.0-1.0 confidence in assessment",
+    "related_entities_flagged": "entity IDs warranting investigation",
+    "investigation_depth": "triage_only, standard, or deep"
   },
   "cascade_config": {
     "risk_threshold": 0.7,

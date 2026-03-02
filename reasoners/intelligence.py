@@ -4,7 +4,13 @@ import asyncio
 import json
 from typing import Any
 
-from models import CascadeResult, DocumentIntelligence, PolicyEvaluationList
+from models import (
+    CascadeResult,
+    DocumentIntelligence,
+    NetworkInsight,
+    PolicyEvaluationList,
+    TriageResult,
+)
 
 from .router import router
 
@@ -27,9 +33,46 @@ def _build_rule_query(document: dict[str, Any]) -> str:
 
 
 @router.reasoner()
+async def triage_document(
+    document: dict[str, Any],
+    domain_config: dict[str, Any],
+) -> dict[str, Any]:
+    triage_result = await router.ai(
+        f"""You are performing a rapid triage assessment on an incoming {domain_config.get("display_name") or domain_config.get("domain") or "domain"} document.
+Do NOT do a full analysis - this is a quick screen to determine if deeper investigation is warranted.
+
+Look for:
+- Amount anomalies (round numbers, just-below-threshold values, unusually high/low)
+- Narrative red flags (vague descriptions, mismatched purpose)
+- Jurisdiction risk signals (high-risk countries, cross-border patterns)
+- Transaction type risk (cash, wire, crypto - higher inherent risk)
+- Velocity indicators (timestamps suggesting rapid sequence)
+- Entity signals (account type, age, verification status hints in the document)
+
+Set investigation_needed=True if ANY meaningful signal exists.
+Set investigation_needed=False ONLY for clearly routine/normal documents.
+When in doubt, investigate.
+
+investigation_focus should list specific areas: counterparty_history, network_analysis, velocity_check, jurisdiction_risk, pattern_search
+
+Domain info:
+{json.dumps({"domain": domain_config.get("domain"), "display_name": domain_config.get("display_name")}, indent=2)}
+
+Raw document:
+{json.dumps(document, indent=2, default=str)}""",
+        schema=TriageResult,
+    )
+
+    return triage_result.model_dump()
+
+
+@router.reasoner()
 async def analyze_document(
     document: dict[str, Any],
     domain_config: dict[str, Any],
+    triage_signals: list[str] | None = None,
+    counterparty_context: dict[str, Any] | None = None,
+    recent_high_risk: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     context_loading = domain_config.get("context_loading", {})
     entity_lookup_field = context_loading.get("entity_lookup_field")
@@ -86,6 +129,7 @@ async def analyze_document(
                 related_documents_map[str(key)] = related_doc
 
     related_documents = list(related_documents_map.values())
+    deep_context_available = bool(counterparty_context) or bool(recent_high_risk)
 
     intelligence = await router.ai(
         f"""{domain_config.get("analysis_prompt", "Analyze this document for risk.")}
@@ -105,10 +149,30 @@ Related history:
 Applicable rules:
 {json.dumps(rules, indent=2, default=str)}
 
+Triage signals (from initial assessment):
+{json.dumps(triage_signals or [], indent=2, default=str)}
+
+Counterparty intelligence:
+{json.dumps(counterparty_context or {}, indent=2, default=str)}
+
+Recent high-risk activity in this domain:
+{json.dumps(recent_high_risk or [], indent=2, default=str)}
+
 Expected enrichment schema:
 {json.dumps(domain_config.get("enrichment_schema", {}), indent=2)}
 
-Return a structured assessment with realistic confidence and clear rationale.""",
+Return a structured assessment with realistic confidence and clear rationale.
+
+Requirements:
+- Provide 3-6 evidence items with specific facts, source, and weight.
+- Recommend concrete actions from: hold, escalate, review_counterparty, enhanced_monitoring, clear, investigate_network.
+- Set confidence based on quality and consistency of evidence.
+- Populate related_entities_flagged with entity IDs that warrant attention.
+- Set investigation_depth to "deep" if counterparty/network context is available, otherwise "standard".
+- If counterparty context indicates recent outgoing transactions to third parties, explicitly look for CHAIN PATTERNS (A->B->C) and reflect that in pattern_match, summary, and recommended_actions when relevant.
+- Avoid generic statements; ground judgments in facts from the document and context.
+
+Deep context available: {deep_context_available}""",
         schema=DocumentIntelligence,
     )
 
@@ -147,6 +211,44 @@ Return one evaluation per policy in the evaluations list.""",
     any_triggered = any(e["triggered"] for e in evaluations)
 
     return {"evaluations": evaluations, "any_triggered": any_triggered}
+
+
+@router.reasoner()
+async def generate_network_insight(
+    document: dict[str, Any],
+    intelligence: dict[str, Any],
+    domain_config: dict[str, Any],
+    related_high_risk: list[dict[str, Any]],
+    entity_updates: list[str],
+) -> dict[str, Any]:
+    network_insight = await router.ai(
+        f"""Generate a network-level intelligence view from a triggered high-risk document.
+
+Domain:
+{json.dumps({"domain": domain_config.get("domain"), "display_name": domain_config.get("display_name")}, indent=2)}
+
+Triggering document:
+{json.dumps(document, indent=2, default=str)}
+
+Triggering intelligence:
+{json.dumps(intelligence, indent=2, default=str)}
+
+Recently flagged high-risk documents:
+{json.dumps(related_high_risk, indent=2, default=str)}
+
+Entities updated during cascade:
+{json.dumps(entity_updates, indent=2, default=str)}
+
+Tasks:
+- Identify network pattern: chain (A->B->C), ring (A->B->C->A), hub (one entity connected to many), cluster (group), or isolated.
+- Calculate total monetary exposure across the observed network.
+- List all entities involved in entities_involved.
+- Write a concise, actionable network summary.
+
+Use only evidence in provided data and avoid speculation.""",
+        schema=NetworkInsight,
+    )
+    return network_insight.model_dump()
 
 
 @router.reasoner()
@@ -244,6 +346,39 @@ async def cascade(
         if counterparty_id not in entity_updates:
             entity_updates.append(counterparty_id)
 
+    recent_high_risk_result = await router.app.call(
+        "reactive-intelligence.find_recent_high_risk",
+        collection=document_collection,
+        min_risk_score=0.6,
+        hours_window=48,
+        limit=max(20, max_reenrich * 2),
+    )
+    related_high_risk = recent_high_risk_result.get("documents", [])
+
+    network_insight = await router.app.call(
+        "reactive-intelligence.generate_network_insight",
+        document=document,
+        intelligence=intelligence,
+        domain_config=domain_config,
+        related_high_risk=related_high_risk,
+        entity_updates=entity_updates,
+    )
+
+    await router.app.call(
+        "reactive-intelligence.log_reaction",
+        event={
+            "trigger_type": "network_insight",
+            "domain": domain_config.get("domain"),
+            "document_id": trigger_doc_id,
+            "collection": document_collection,
+            "risk_score": risk_score,
+            "entity_updates": entity_updates,
+            "network_pattern": network_insight.get("risk_pattern"),
+            "network_exposure": network_insight.get("total_exposure"),
+            "network_summary": network_insight.get("summary"),
+        },
+    )
+
     documents_affected = 1 + len(entity_updates) + documents_reenriched
     summary = (
         f"Cascade for {trigger_doc_id} updated {len(entity_updates)} entities "
@@ -255,6 +390,9 @@ async def cascade(
         entity_updates=entity_updates,
         documents_reenriched=documents_reenriched,
         summary=summary,
+        network_insight=NetworkInsight.model_validate(network_insight)
+        if network_insight
+        else None,
     )
 
     return result.model_dump()
@@ -315,11 +453,77 @@ async def process_document(
     if document.get("_intelligence"):
         return {"skipped": True, "reason": "already enriched", "document_id": doc_id}
 
-    analysis = await router.app.call(
-        "reactive-intelligence.analyze_document",
+    triage = await router.app.call(
+        "reactive-intelligence.triage_document",
         document=document,
         domain_config=domain_config,
     )
+
+    context_loading = domain_config.get("context_loading", {})
+    investigation_needed = bool(triage.get("investigation_needed"))
+    investigation_depth = "standard"
+
+    if investigation_needed:
+        counterparty_field = context_loading.get("counterparty_field")
+        counterparty_context_task = None
+        if (
+            isinstance(counterparty_field, str)
+            and document.get(counterparty_field) is not None
+        ):
+            counterparty_context_task = router.app.call(
+                "reactive-intelligence.find_counterparty_context",
+                counterparty_id=str(document[counterparty_field]),
+                entity_collection=domain_config["entity_collection"],
+                entity_id_field=domain_config["entity_id_field"],
+                document_collection=domain_config.get("context_loading", {}).get(
+                    "history_collection", domain_config["document_collection"]
+                ),
+                entity_lookup_field=domain_config.get("context_loading", {}).get(
+                    "entity_lookup_field", domain_config["entity_id_field"]
+                ),
+                limit=int(context_loading.get("counterparty_history_limit", 20)),
+            )
+
+        recent_high_risk_task = router.app.call(
+            "reactive-intelligence.find_recent_high_risk",
+            collection=domain_config["document_collection"],
+            min_risk_score=0.6,
+            hours_window=48,
+            limit=int(context_loading.get("recent_high_risk_limit", 20)),
+        )
+
+        if counterparty_context_task is not None:
+            counterparty_result, recent_high_risk_result = await asyncio.gather(
+                counterparty_context_task,
+                recent_high_risk_task,
+            )
+            counterparty_context = counterparty_result
+        else:
+            recent_high_risk_result = await recent_high_risk_task
+            counterparty_context = None
+
+        analysis = await router.app.call(
+            "reactive-intelligence.analyze_document",
+            document=document,
+            domain_config=domain_config,
+            triage_signals=triage.get("signals") or [],
+            counterparty_context=counterparty_context,
+            recent_high_risk=recent_high_risk_result.get("documents") or [],
+        )
+        investigation_depth = "deep"
+    else:
+        analysis = await router.app.call(
+            "reactive-intelligence.analyze_document",
+            document=document,
+            domain_config=domain_config,
+        )
+        investigation_depth = "standard"
+
+    risk_score = float(analysis.get("risk_score", 0))
+    if not investigation_needed and risk_score < 0.2:
+        investigation_depth = "triage_only"
+
+    analysis["investigation_depth"] = investigation_depth
 
     await router.app.call(
         "reactive-intelligence.enrich_document",
@@ -346,7 +550,6 @@ async def process_document(
     ]
 
     cascade_result = None
-    risk_score = float(analysis.get("risk_score", 0))
     if risk_score >= float(
         domain_config.get("cascade_config", {}).get("risk_threshold", 0.7)
     ):
@@ -366,6 +569,9 @@ async def process_document(
             "collection": collection,
             "risk_score": risk_score,
             "risk_category": analysis.get("risk_category"),
+            "triage_priority": triage.get("priority"),
+            "investigation_depth": investigation_depth,
+            "triage_signals": triage.get("signals") or [],
             "policies_triggered": [p["policy_id"] for p in triggered_policies],
             "cascade_triggered": cascade_result is not None,
         },
@@ -374,6 +580,8 @@ async def process_document(
     return {
         "domain": domain,
         "document_id": doc_id,
+        "triage": triage,
+        "investigation_depth": investigation_depth,
         "risk_score": risk_score,
         "risk_category": analysis.get("risk_category"),
         "policies_triggered": [p["policy_id"] for p in triggered_policies],

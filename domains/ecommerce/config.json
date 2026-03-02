@@ -21,7 +21,12 @@
     "risk_category": "one of: low, medium, high, critical",
     "pattern_match": "detected fraud pattern or 'none' (e.g. friendly_fraud, velocity_abuse, synthetic_identity, card_testing, account_takeover)",
     "flags": "list of applicable fraud rule IDs from the fraud_rules collection",
-    "summary": "2-3 sentence fraud assessment"
+    "summary": "2-3 sentence fraud assessment",
+    "evidence": "list of {fact, source, weight} objects supporting the assessment",
+    "recommended_actions": "list of actions: hold, escalate, review_counterparty, enhanced_monitoring, clear, investigate_network",
+    "confidence": "float 0.0-1.0 confidence in assessment",
+    "related_entities_flagged": "entity IDs warranting investigation",
+    "investigation_depth": "triage_only, standard, or deep"
   },
   "cascade_config": {
     "risk_threshold": 0.7,

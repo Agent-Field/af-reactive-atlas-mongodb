@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from bson import ObjectId
@@ -160,6 +160,56 @@ def log_reaction(event: dict[str, Any]) -> dict[str, Any]:
     payload["agent"] = "reactive-intelligence"
     db["reaction_timeline"].insert_one(payload)
     return {"ok": True}
+
+
+@router.skill()
+def find_counterparty_context(
+    counterparty_id: str,
+    entity_collection: str,
+    entity_id_field: str,
+    document_collection: str,
+    entity_lookup_field: str,
+    limit: int = 20,
+) -> dict[str, Any]:
+    db = _get_db()
+    entity = db[entity_collection].find_one(
+        {entity_id_field: counterparty_id},
+        {"_id": 0},
+    )
+    recent_documents = list(
+        db[document_collection]
+        .find({entity_lookup_field: counterparty_id}, {"_id": 0})
+        .sort("timestamp", DESCENDING)
+        .limit(int(limit))
+    )
+    return {
+        "ok": True,
+        "entity": _serialize(entity) if entity is not None else None,
+        "recent_documents": _serialize(recent_documents),
+        "document_count": len(recent_documents),
+    }
+
+
+@router.skill()
+def find_recent_high_risk(
+    collection: str,
+    min_risk_score: float = 0.6,
+    hours_window: int = 48,
+    limit: int = 20,
+) -> dict[str, Any]:
+    db = _get_db()
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=int(hours_window))
+    query: dict[str, Any] = {
+        "_intelligence.risk_score": {"$gte": float(min_risk_score)},
+        "_intelligence.analyzed_at": {"$gte": cutoff},
+    }
+    docs = list(
+        db[collection]
+        .find(query, {"_id": 0})
+        .sort("_intelligence.risk_score", DESCENDING)
+        .limit(int(limit))
+    )
+    return {"ok": True, "count": len(docs), "documents": _serialize(docs)}
 
 
 @router.skill()

@@ -2,7 +2,7 @@
 
 **MongoDB Atlas as an AI Backend — documents that think for themselves.**
 
-Every transaction inserted into Atlas is automatically analyzed by an AI agent. No polling. No cron jobs. No rule engines. Atlas Triggers fire on insert, call [AgentField](https://github.com/Agent-Field/agentfield), and the document is enriched in place with risk scores, pattern detection, and compliance flags — all driven by LLM reasoning over live context.
+Every transaction inserted into Atlas is automatically analyzed by an AI agent. No polling. No cron jobs. No rule engines. [Atlas Triggers](https://www.mongodb.com/docs/atlas/app-services/triggers/) fire on insert, call [AgentField](https://github.com/Agent-Field/agentfield), and the document is enriched in place — risk scores, pattern detection, compliance flags, all driven by LLM reasoning over live context.
 
 [![AgentField](https://img.shields.io/badge/Powered%20by-AgentField-6366f1?style=flat-square)](https://github.com/Agent-Field/agentfield)
 [![MongoDB Atlas](https://img.shields.io/badge/MongoDB-Atlas-00ED64?style=flat-square&logo=mongodb&logoColor=white)](https://www.mongodb.com/atlas)
@@ -11,19 +11,23 @@ Every transaction inserted into Atlas is automatically analyzed by an AI agent. 
 
 ---
 
-## What happens when a document is inserted
+## How it works
 
 ```
-INSERT transaction → Atlas Trigger fires → AgentField process_document
-                                                        ↓
-                                           load account context
-                                           load compliance rules
-                                           LLM reasoning over full context
-                                                        ↓
-                                           _intelligence written back to document
-                                           policies evaluated (natural language)
-                                           cascade: re-score linked accounts
-                                           reaction_timeline updated
+INSERT transaction
+       ↓
+Atlas Trigger fires
+       ↓
+AgentField process_document
+       ↓
+  load account context
+  load compliance rules
+  LLM reasoning over full context
+       ↓
+  _intelligence written back to document
+  policies evaluated in natural language
+  cascade: re-score linked accounts
+  reaction_timeline updated
 ```
 
 The database initiates intelligence. Your application code does nothing.
@@ -32,25 +36,25 @@ The database initiates intelligence. Your application code does nothing.
 
 ## What the AI detects
 
-| Scenario | What it looks like | Why it's hard |
+| Scenario | What it looks like | Why static rules fail |
 |---|---|---|
 | `clean` | Normal business transfers | Baseline — should score low |
-| `structuring` | 5 cash deposits, all just under $10K | Each deposit is legal; the pattern is not |
+| `structuring` | 5 cash deposits just under $10K | Each deposit is legal; the pattern is not |
 | `round-trip` | A→B→C→A with slight value decay | Intent is hidden across three hops |
 | `layering` | US→HK→KY→CH SWIFT chain | Each hop looks normal in isolation |
 | `big-one` | Single $500K–$1.2M Cayman wire | High-value + jurisdiction = policy trigger |
 
-Static rule engines fail at these because intent is spread across context and history. The AI reasoner combines transaction details, account profile, related activity, and policy intent in a single decision — and writes the result directly into the document.
+The AI reasoner combines transaction details, account profile, related activity, and policy intent in a single decision — and writes the result directly into the document.
 
 ---
 
 ## Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) + Docker Compose
-- Python 3.10+ (for the demo runner and seed script)
+- Python 3.10+
 - [MongoDB Atlas](https://www.mongodb.com/cloud/atlas/register) account (free M0 tier is enough)
 - [OpenRouter](https://openrouter.ai) API key
-- [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) (free tunnel — no account needed)
+- [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) (free tunnel, no account needed)
 
 ---
 
@@ -77,9 +81,9 @@ MONGODB_URI=mongodb+srv://user:pass@cluster0.xxxxx.mongodb.net/reactive_intellig
 docker compose up -d
 ```
 
-This starts two services:
-- **Control plane** on `http://localhost:8092` — the AgentField orchestrator and UI
-- **reactive-intelligence agent** on `http://localhost:8004` — your AI backend
+Two services start:
+- **Control plane** at `http://localhost:8092` — AgentField orchestrator and UI
+- **reactive-intelligence agent** at `http://localhost:8004` — your AI backend
 
 ### 3. Seed Atlas with base data
 
@@ -97,16 +101,16 @@ Atlas Triggers need a public URL to reach your local AgentField instance.
 cloudflared tunnel --url http://localhost:8092
 ```
 
-Copy the `https://xxxx.trycloudflare.com` URL. You will use it in the next step.
+Copy the `https://xxxx.trycloudflare.com` URL — you'll use it in the next step.
 
 ### 5. Create the Atlas Trigger
 
 In [Atlas App Services](https://cloud.mongodb.com):
 
 1. Go to **Triggers** → **Add Trigger**
-2. Set **Trigger Type** to `Database`
-3. Set **Operation Type** to `Insert`
-4. Set **Collection** to `transactions`
+2. **Trigger Type**: Database
+3. **Operation Type**: Insert
+4. **Collection**: `transactions`
 5. Enable **Full Document**
 6. Paste this function, replacing `YOUR_TUNNEL_URL`:
 
@@ -119,10 +123,7 @@ exports = async function(changeEvent) {
     url: "https://YOUR_TUNNEL_URL/api/v1/execute/async/reactive-intelligence.process_document",
     headers: { "Content-Type": ["application/json"] },
     body: JSON.stringify({
-      input: {
-        collection: "transactions",
-        document: doc
-      }
+      input: { collection: "transactions", document: doc }
     })
   });
 
@@ -139,7 +140,7 @@ python3 demo.py reset
 python3 demo.py structuring
 ```
 
-The demo runner inserts transactions, submits them to AgentField, waits for enrichment, and prints results. Every run uses randomized amounts and IDs — no two runs look the same.
+Every run uses randomized amounts and IDs — no two runs look the same.
 
 ---
 
@@ -167,7 +168,7 @@ python3 demo.py custom \
 
 ## What to watch
 
-**In Atlas UI** (`cloud.mongodb.com` → your cluster → Browse Collections):
+**In Atlas UI** (`cloud.mongodb.com` → Browse Collections):
 
 - `transactions` — each document gains `_intelligence` within ~10–15 seconds of insert
 - `reaction_timeline` — policy decisions and cascade events logged in real time
@@ -193,9 +194,9 @@ python3 demo.py custom \
 
 ---
 
-## How it works
+## How it works (under the hood)
 
-This demo is built on [AgentField](https://github.com/Agent-Field/agentfield) — a framework for running AI agents as microservices, with built-in observability, async execution, and structured skill composition.
+Built on [AgentField](https://github.com/Agent-Field/agentfield) — a framework for running AI agents as microservices with built-in observability, async execution, and structured skill composition.
 
 **Skills** handle deterministic MongoDB operations:
 
@@ -210,8 +211,8 @@ This demo is built on [AgentField](https://github.com/Agent-Field/agentfield) �
 
 **The `process_document` reasoner** orchestrates those skills into a single document-level judgment. It receives the raw transaction from the Atlas Trigger, calls skills in sequence, and decides whether to cascade based on the enriched result.
 
-The key difference from a chatbot: intelligence runs on database events and mutates operational data directly.
-The key difference from a static workflow: policy evaluation is semantic — you write intent in plain English, not if-else rules.
+This is different from a chatbot: intelligence runs on database events and mutates operational data directly.
+This is different from a static workflow: policy evaluation is semantic — you write intent in plain English, not if-else rules.
 
 ---
 
@@ -219,15 +220,15 @@ The key difference from a static workflow: policy evaluation is semantic — you
 
 ```
 .
-├── main.py              # Agent entry point — registers reasoners and skills
-├── models.py            # Pydantic models for all data structures
+├── main.py              # Agent entry point
+├── models.py            # Pydantic models
 ├── reasoners/
 │   ├── intelligence.py  # process_document reasoner + cascade logic
-│   ├── skills.py        # All MongoDB skill implementations
+│   ├── skills.py        # MongoDB skill implementations
 │   └── router.py        # AgentField router setup
 ├── setup/
 │   └── seed.py          # Seeds Atlas with accounts, policies, rules
-├── demo.py              # Demo runner — scenarios with randomized data
+├── demo.py              # Demo runner with randomized scenarios
 ├── docker-compose.yml   # AgentField control plane + agent
 ├── Dockerfile           # Agent container
 └── .env.example         # Environment variable template

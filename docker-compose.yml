@@ -1,0 +1,32 @@
+services:
+  control-plane:
+    image: agentfield/control-plane:latest
+    environment:
+      AGENTFIELD_HTTP_ADDR: 0.0.0.0:8080
+      AGENTFIELD_STORAGE_MODE: local
+    ports:
+      - "8092:8080"
+    volumes:
+      - agentfield-data:/data
+    restart: unless-stopped
+
+  reactive-intelligence:
+    build:
+      context: ..
+      dockerfile: reactive-atlas/Dockerfile
+    env_file: .env
+    environment:
+      AGENTFIELD_SERVER: http://control-plane:8080
+      AGENT_CALLBACK_URL: http://reactive-intelligence:8001
+      PORT: "8001"
+      AI_MODEL: ${AI_MODEL:-openrouter/minimax/minimax-m2.5}
+      MONGODB_DATABASE: ${MONGODB_DATABASE:-reactive_intelligence}
+    ports:
+      - "8004:8001"
+    depends_on:
+      control-plane:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  agentfield-data:

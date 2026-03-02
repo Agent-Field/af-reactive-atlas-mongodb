@@ -1,0 +1,5 @@
+agentfield
+pydantic>=2.0
+httpx
+pymongo[srv]
+openai

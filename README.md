@@ -9,41 +9,95 @@
 
 ---
 
-## How it works
+## What this is
 
-A document is inserted into MongoDB Atlas. An Atlas Trigger fires immediately, passing the full document to AgentField. AgentField runs a reasoning agent that loads domain configuration from the database, fetches entity context, retrieves relevant rules, and calls an LLM to produce a structured judgment. The result is written back into the source document as `_intelligence`. Policy evaluation runs next. If the risk score crosses a threshold, a cascade fires to update linked entities. Every step is logged to `reaction_timeline`.
+Reactive Atlas turns any MongoDB collection into an **intelligent data layer**. Documents inserted into Atlas are automatically analyzed, enriched, and acted upon by an AI agent — no application code, no polling, no rule engines.
 
-The database initiates intelligence. Your application code does nothing.
+The core idea: **your database already knows when data changes. Let it trigger intelligence.**
 
-The behavior of the AI — what it analyzes, what rules it applies, what policies it enforces, when it cascades — is entirely driven by configuration documents stored in MongoDB. Change what the AI does by changing MongoDB documents, not code.
+- A new transaction lands in `transactions` — the AI scores it for money laundering risk, flags suspicious patterns, and updates linked account profiles
+- A new order lands in `orders` — the AI evaluates it for fraud signals, checks velocity patterns, and holds high-risk orders for review
+- A new patient record lands in `intake` — the AI triages urgency, cross-references drug interactions, and routes to the right department
+
+Same engine. Same code. Different config document in MongoDB.
 
 ---
 
-## Two domains shipped
+## How it works
 
-This repository ships two complete domains to demonstrate that the pattern is universal.
+```mermaid
+flowchart TD
+    A["Document inserted into Atlas"] --> B["Atlas Trigger fires"]
+    B --> C["AgentField resolves domain from collection"]
+    C --> D["Loads config + entity context + rules"]
+    D --> E["LLM produces structured judgment"]
+    E --> F["_intelligence written back to document"]
+    F --> G{"Risk above threshold?"}
+    G -- Yes --> H["Cascade: update entities,\nre-enrich related docs"]
+    G -- No --> I["Log to reaction_timeline"]
+    H --> I
+```
 
-**Finance (AML compliance)** — triggers on the `transactions` collection:
+Step by step:
 
-| Scenario | What it represents |
+1. **Document insert** — your app (or a feed, API, ETL) writes a document to an Atlas collection
+2. **Atlas Trigger** — MongoDB's built-in [Database Trigger](https://www.mongodb.com/docs/atlas/app-services/triggers/) fires on the insert and calls AgentField over HTTPS
+3. **Domain resolution** — AgentField maps the collection name to a domain (`transactions` -> `finance`, `orders` -> `ecommerce`) and loads the domain's config document from MongoDB
+4. **Context assembly** — the agent fetches the entity profile (account, customer, patient), recent history from the same collection, and relevant domain rules via text search
+5. **LLM reasoning** — all context is passed to the LLM with the domain-specific analysis prompt. The LLM returns a structured `DocumentIntelligence` object: risk score, risk category, detected pattern, applicable rule IDs, and a summary
+6. **In-place enrichment** — the result is written back into the source document as `_intelligence`. The original document is untouched; intelligence is additive
+7. **Policy evaluation** — active policies (written in plain English) are evaluated against the enriched document. Policies trigger actions like `flag`, `hold`, `investigate`, or `escalate`
+8. **Cascade** — if the risk score exceeds a configurable threshold, the agent updates the entity's risk profile and re-enriches related unenriched documents in the same collection
+9. **Audit trail** — every decision is logged to `reaction_timeline` with timestamps, scores, and triggered policies
+
+**The database initiates intelligence. Your application code does nothing.**
+
+All AI behavior — the analysis prompt, which rules to load, when to cascade, what policies to enforce — lives in a MongoDB config document. Change the config, change the behavior. No code changes. No redeploy.
+
+---
+
+## Use cases
+
+Reactive Atlas works on **any domain where documents arrive and need intelligent assessment**. The engine is generic; the domain config makes it specific.
+
+| Domain | Collection | What the AI does |
+|---|---|---|
+| **Financial compliance** | `transactions` | AML pattern detection, sanctions screening, structuring and layering identification, counterparty risk propagation |
+| **E-commerce fraud** | `orders` | Velocity abuse detection, synthetic identity signals, friendly fraud patterns, address mismatch flagging |
+| **Healthcare triage** | `patient_intake` | Urgency scoring, drug interaction alerts, department routing, insurance pre-authorization checks |
+| **Content moderation** | `posts` | Toxicity scoring, policy violation detection, escalation routing, context-aware nuance beyond keyword matching |
+| **Cybersecurity** | `security_events` | Threat classification, anomaly scoring against baseline behavior, incident severity assessment, lateral movement detection |
+| **Insurance claims** | `claims` | Fraud signal detection, damage assessment consistency, claimant history cross-referencing, fast-track vs. investigation routing |
+| **IoT / Telemetry** | `sensor_readings` | Anomaly detection against device baselines, predictive maintenance triggers, fleet-wide pattern correlation |
+| **Supply chain** | `shipments` | Delay risk scoring, vendor reliability assessment, customs compliance flagging, route anomaly detection |
+
+To build any of these, you create a `domains/yourname/` directory with a config file, seed it, and point an Atlas Trigger at the collection. Zero Python changes.
+
+### Shipped examples
+
+This repo includes two fully worked domains you can run immediately:
+
+**[Finance (AML compliance)](domains/finance/)** — triggers on `transactions`, seeds 50 accounts + 20 compliance rules + 5 policies:
+
+| Scenario | What happens |
 |---|---|
-| `clean` | Normal business transfers; baseline for low-risk scoring |
-| `structuring` | Five cash deposits just under $10K; each legal, the pattern is not |
-| `round-trip` | A to B to C back to A with slight value decay; intent hidden across hops |
-| `layering` | US to HK to KY to CH SWIFT chain; each hop looks normal in isolation |
-| `big-one` | Single $500K to $1.2M Cayman wire; high-value plus jurisdiction triggers policy |
+| `clean` | 3 normal business transfers — baseline, should score low |
+| `structuring` | 5 cash deposits just under $10K — each legal, the pattern is not |
+| `round-trip` | A->B->C->A circular transfer — intent hidden across 3 hops |
+| `layering` | US->HK->KY->CH SWIFT chain — each hop looks normal in isolation |
+| `big-one` | Single $500K-$1.2M Cayman wire — high-value + jurisdiction triggers policy |
 
-**E-commerce (order fraud)** — triggers on the `orders` collection:
+**[E-commerce (order fraud)](domains/ecommerce/)** — triggers on `orders`, seeds 40 customers + 15 fraud rules + 5 policies:
 
-| Scenario | What it represents |
+| Scenario | What happens |
 |---|---|
-| `normal` | Legitimate purchase; baseline for low-risk scoring |
-| `velocity-abuse` | Rapid repeat orders from the same customer in a short window |
-| `friendly-fraud` | High-value order with a history of chargebacks on the account |
-| `synthetic-identity` | New account, no history, high-value order, mismatched signals |
-| `high-value-mismatch` | Order value inconsistent with account tenure and purchase history |
+| `normal` | 3 legitimate orders — baseline, should score low |
+| `friendly-fraud` | Expensive items from a customer with high return history |
+| `velocity-abuse` | 5 rapid orders, different shipping addresses, expedited shipping |
+| `synthetic-identity` | New accounts, mismatched billing/shipping, high-value electronics |
+| `high-value-mismatch` | Large cross-border electronics order from a new account |
 
-Both domains run on the same agent, the same skills, and the same reasoning loop. The domain configuration in MongoDB tells the engine what to do for each collection.
+Both run on the same agent, same skills, same reasoning loop. The only difference is the config document in MongoDB.
 
 ---
 

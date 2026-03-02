@@ -1,9 +1,12 @@
-.PHONY: up down build logs seed reset tunnel demo status poll
+.PHONY: up down build logs seed demo reset status tunnel list poll
 
 ifneq (,$(wildcard ./.env))
 include .env
 export
 endif
+
+DOMAIN ?= finance
+SCENARIO ?= clean
 
 up:
 	docker compose up --build -d
@@ -19,19 +22,26 @@ logs:
 
 seed:
 	@test -n "$(MONGODB_URI)" || (echo "MONGODB_URI is required. Add it to .env" && exit 1)
-	MONGODB_URI="$(MONGODB_URI)" MONGODB_DATABASE="$(MONGODB_DATABASE)" python3 setup/seed.py
+	python3 setup/seed.py $(DOMAIN)
+
+seed-all:
+	@test -n "$(MONGODB_URI)" || (echo "MONGODB_URI is required. Add it to .env" && exit 1)
+	python3 setup/seed.py all
+
+demo:
+	python3 demo.py $(DOMAIN) $(SCENARIO)
 
 reset:
-	python3 demo.py reset
+	python3 demo.py $(DOMAIN) reset
+
+status:
+	python3 demo.py $(DOMAIN) status
+
+list:
+	python3 demo.py list
 
 tunnel:
 	cloudflared tunnel --url http://localhost:8092
-
-demo:
-	python3 demo.py clean
-
-status:
-	python3 demo.py status
 
 ID ?=
 poll:

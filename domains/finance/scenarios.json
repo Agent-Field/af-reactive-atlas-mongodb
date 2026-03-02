@@ -1,0 +1,455 @@
+{
+  "order": [
+    "clean",
+    "structuring",
+    "round-trip",
+    "layering",
+    "big-one"
+  ],
+  "scenarios": {
+    "clean": {
+      "title": "Clean Business Transactions",
+      "description": "Three normal transactions with realistic narratives.",
+      "watch": [
+        "Risk scores should stay low.",
+        "Pattern match should be none.",
+        "No flags."
+      ],
+      "documents": [
+        {
+          "transaction_id": "__AUTO__",
+          "account_id": "acc_0005",
+          "counterparty_id": "acc_0010",
+          "amount": {
+            "random": [
+              1000,
+              20000
+            ]
+          },
+          "currency": "USD",
+          "type": "ach",
+          "channel": "online_banking",
+          "geolocation": {
+            "country": "US",
+            "city": "Chicago"
+          },
+          "narrative": {
+            "choice": [
+              "Invoice settlement for quarterly logistics services",
+              "Enterprise software annual license renewal"
+            ]
+          },
+          "status": "completed",
+          "timestamp": "__NOW__"
+        },
+        {
+          "transaction_id": "__AUTO__",
+          "account_id": "acc_0018",
+          "counterparty_id": "acc_0022",
+          "amount": {
+            "random": [
+              1500,
+              25000
+            ]
+          },
+          "currency": "EUR",
+          "type": "wire_transfer",
+          "channel": "api",
+          "geolocation": {
+            "country": "DE",
+            "city": "Berlin"
+          },
+          "narrative": {
+            "choice": [
+              "Vendor payment for managed infrastructure support",
+              "Regional office operating expense transfer"
+            ]
+          },
+          "status": "completed",
+          "timestamp": "__NOW__"
+        },
+        {
+          "transaction_id": "__AUTO__",
+          "account_id": "acc_0033",
+          "counterparty_id": "acc_0007",
+          "amount": {
+            "random": [
+              1200,
+              18000
+            ]
+          },
+          "currency": "GBP",
+          "type": "ach",
+          "channel": "api",
+          "geolocation": {
+            "country": "GB",
+            "city": "London"
+          },
+          "narrative": {
+            "choice": [
+              "Professional services retainer payment",
+              "Procurement payment for approved hardware order"
+            ]
+          },
+          "status": "completed",
+          "timestamp": "__NOW__"
+        }
+      ]
+    },
+    "structuring": {
+      "title": "Structuring Pattern",
+      "description": "Five cash deposits from one account, all just under the $10K threshold.",
+      "watch": [
+        "Pattern detection should identify structuring behavior.",
+        "Risk should rise across repeated deposits.",
+        "Flags should include structuring-related rules."
+      ],
+      "documents": [
+        {
+          "transaction_id": "__AUTO__",
+          "account_id": "acc_0028",
+          "counterparty_id": "acc_0028",
+          "amount": {
+            "random": [
+              9100,
+              9950
+            ]
+          },
+          "currency": "USD",
+          "type": "cash_deposit",
+          "channel": "branch",
+          "geolocation": {
+            "country": "US",
+            "city": "Miami"
+          },
+          "narrative": {
+            "choice": [
+              "Cash deposit from daily branch activity",
+              "Cash receipt settlement",
+              "Cash deposit for local operations"
+            ]
+          },
+          "status": "completed",
+          "timestamp": "__NOW__"
+        },
+        {
+          "transaction_id": "__AUTO__",
+          "account_id": "acc_0028",
+          "counterparty_id": "acc_0028",
+          "amount": {
+            "random": [
+              9100,
+              9950
+            ]
+          },
+          "currency": "USD",
+          "type": "cash_deposit",
+          "channel": "branch",
+          "geolocation": {
+            "country": "US",
+            "city": "Miami"
+          },
+          "narrative": {
+            "choice": [
+              "Cash deposit from daily branch activity",
+              "Cash receipt settlement",
+              "Cash deposit for local operations"
+            ]
+          },
+          "status": "completed",
+          "timestamp": "__NOW__"
+        },
+        {
+          "transaction_id": "__AUTO__",
+          "account_id": "acc_0028",
+          "counterparty_id": "acc_0028",
+          "amount": {
+            "random": [
+              9100,
+              9950
+            ]
+          },
+          "currency": "USD",
+          "type": "cash_deposit",
+          "channel": "branch",
+          "geolocation": {
+            "country": "US",
+            "city": "Miami"
+          },
+          "narrative": {
+            "choice": [
+              "Cash deposit from daily branch activity",
+              "Cash receipt settlement",
+              "Cash deposit for local operations"
+            ]
+          },
+          "status": "completed",
+          "timestamp": "__NOW__"
+        },
+        {
+          "transaction_id": "__AUTO__",
+          "account_id": "acc_0028",
+          "counterparty_id": "acc_0028",
+          "amount": {
+            "random": [
+              9100,
+              9950
+            ]
+          },
+          "currency": "USD",
+          "type": "cash_deposit",
+          "channel": "branch",
+          "geolocation": {
+            "country": "US",
+            "city": "Miami"
+          },
+          "narrative": {
+            "choice": [
+              "Cash deposit from daily branch activity",
+              "Cash receipt settlement",
+              "Cash deposit for local operations"
+            ]
+          },
+          "status": "completed",
+          "timestamp": "__NOW__"
+        },
+        {
+          "transaction_id": "__AUTO__",
+          "account_id": "acc_0028",
+          "counterparty_id": "acc_0028",
+          "amount": {
+            "random": [
+              9100,
+              9950
+            ]
+          },
+          "currency": "USD",
+          "type": "cash_deposit",
+          "channel": "branch",
+          "geolocation": {
+            "country": "US",
+            "city": "Miami"
+          },
+          "narrative": {
+            "choice": [
+              "Cash deposit from daily branch activity",
+              "Cash receipt settlement",
+              "Cash deposit for local operations"
+            ]
+          },
+          "status": "completed",
+          "timestamp": "__NOW__"
+        }
+      ]
+    },
+    "round-trip": {
+      "title": "Round-Trip Flow",
+      "description": "Three-hop circular transfer A->B->C->A.",
+      "watch": [
+        "Pattern detection should identify circular flow.",
+        "Summary should mention round-tripping behavior.",
+        "Related accounts may get risk updates."
+      ],
+      "documents": [
+        {
+          "transaction_id": "__AUTO__",
+          "account_id": "acc_0015",
+          "counterparty_id": "acc_0025",
+          "amount": {
+            "random": [
+              120000,
+              220000
+            ]
+          },
+          "currency": "USD",
+          "type": "wire_transfer",
+          "channel": "swift",
+          "geolocation": {
+            "country": "CH",
+            "city": "Zurich"
+          },
+          "narrative": "Investment allocation transfer",
+          "status": "completed",
+          "timestamp": "__NOW__"
+        },
+        {
+          "transaction_id": "__AUTO__",
+          "account_id": "acc_0025",
+          "counterparty_id": "acc_0035",
+          "amount": {
+            "random": [
+              115000,
+              210000
+            ]
+          },
+          "currency": "USD",
+          "type": "wire_transfer",
+          "channel": "swift",
+          "geolocation": {
+            "country": "HK",
+            "city": "Hong Kong"
+          },
+          "narrative": "Intercompany treasury adjustment",
+          "status": "completed",
+          "timestamp": "__NOW__"
+        },
+        {
+          "transaction_id": "__AUTO__",
+          "account_id": "acc_0035",
+          "counterparty_id": "acc_0015",
+          "amount": {
+            "random": [
+              110000,
+              205000
+            ]
+          },
+          "currency": "USD",
+          "type": "wire_transfer",
+          "channel": "swift",
+          "geolocation": {
+            "country": "SG",
+            "city": "Singapore"
+          },
+          "narrative": "Portfolio balancing transfer",
+          "status": "completed",
+          "timestamp": "__NOW__"
+        }
+      ]
+    },
+    "layering": {
+      "title": "Layering Across Jurisdictions",
+      "description": "Four SWIFT hops US->HK->KY->CH with slight value decay.",
+      "watch": [
+        "Pattern detection should identify layering behavior.",
+        "High-risk jurisdiction controls should trigger on KY hop.",
+        "Cascade can propagate risk to linked entities."
+      ],
+      "documents": [
+        {
+          "transaction_id": "__AUTO__",
+          "account_id": "acc_0003",
+          "counterparty_id": "acc_0019",
+          "amount": {
+            "random": [
+              180000,
+              320000
+            ]
+          },
+          "currency": "USD",
+          "type": "wire_transfer",
+          "channel": "swift",
+          "geolocation": {
+            "country": "US",
+            "city": "New York"
+          },
+          "narrative": "Cross-border settlement transfer",
+          "status": "completed",
+          "timestamp": "__NOW__"
+        },
+        {
+          "transaction_id": "__AUTO__",
+          "account_id": "acc_0019",
+          "counterparty_id": "acc_0038",
+          "amount": {
+            "random": [
+              175000,
+              315000
+            ]
+          },
+          "currency": "USD",
+          "type": "wire_transfer",
+          "channel": "swift",
+          "geolocation": {
+            "country": "HK",
+            "city": "Hong Kong"
+          },
+          "narrative": "Strategic reserve movement",
+          "status": "completed",
+          "timestamp": "__NOW__"
+        },
+        {
+          "transaction_id": "__AUTO__",
+          "account_id": "acc_0038",
+          "counterparty_id": "acc_0046",
+          "amount": {
+            "random": [
+              170000,
+              310000
+            ]
+          },
+          "currency": "USD",
+          "type": "wire_transfer",
+          "channel": "swift",
+          "geolocation": {
+            "country": "KY",
+            "city": "George Town"
+          },
+          "narrative": "Liquidity routing transfer",
+          "status": "completed",
+          "timestamp": "__NOW__"
+        },
+        {
+          "transaction_id": "__AUTO__",
+          "account_id": "acc_0046",
+          "counterparty_id": "acc_0009",
+          "amount": {
+            "random": [
+              165000,
+              305000
+            ]
+          },
+          "currency": "USD",
+          "type": "wire_transfer",
+          "channel": "swift",
+          "geolocation": {
+            "country": "CH",
+            "city": "Geneva"
+          },
+          "narrative": "Offshore vehicle funding movement",
+          "status": "completed",
+          "timestamp": "__NOW__"
+        }
+      ]
+    },
+    "big-one": {
+      "title": "Single High-Risk Wire",
+      "description": "One large pending-review SWIFT wire from Cayman Islands.",
+      "watch": [
+        "Risk score should be high or critical.",
+        "Flags should include high-value and jurisdiction rules.",
+        "Policy and cascade activity should appear in reaction_timeline."
+      ],
+      "documents": [
+        {
+          "transaction_id": "__AUTO__",
+          "account_id": "acc_0042",
+          "counterparty_id": "acc_0049",
+          "amount": {
+            "random": [
+              500000,
+              1200000
+            ]
+          },
+          "currency": "USD",
+          "type": "wire_transfer",
+          "channel": "swift",
+          "geolocation": {
+            "country": "KY",
+            "city": "George Town"
+          },
+          "narrative": "Consulting fees - offshore vehicle administration",
+          "status": "pending_review",
+          "timestamp": "__NOW__"
+        }
+      ]
+    }
+  },
+  "custom_template": {
+    "account_id": "acc_0012",
+    "counterparty_id": "acc_0030",
+    "currency": "USD",
+    "channel": "api",
+    "city": "Unknown",
+    "status": "completed"
+  }
+}

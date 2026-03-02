@@ -1,0 +1,47 @@
+[
+  {
+    "policy_id": "high-value-new-customer",
+    "domain": "ecommerce",
+    "collection": "orders",
+    "trigger": "insert",
+    "intent": "Flag orders over $500 from customers with accounts less than 30 days old for manual review before shipping, with heightened attention to electronics, gift cards, and expedited fulfillment.",
+    "action": "hold",
+    "active": true
+  },
+  {
+    "policy_id": "velocity-alert",
+    "domain": "ecommerce",
+    "collection": "orders",
+    "trigger": "insert",
+    "intent": "Trigger an investigation when more than three orders are submitted within one hour by the same customer, especially when shipping destinations or payment attempts vary across the burst.",
+    "action": "investigate",
+    "active": true
+  },
+  {
+    "policy_id": "address-mismatch",
+    "domain": "ecommerce",
+    "collection": "orders",
+    "trigger": "insert",
+    "intent": "Flag orders where shipping details materially differ from billing or profile country, and prioritize mismatches involving high-value goods or first-time delivery locations.",
+    "action": "flag",
+    "active": true
+  },
+  {
+    "policy_id": "return-abuse",
+    "domain": "ecommerce",
+    "collection": "orders",
+    "trigger": "insert",
+    "intent": "Flag orders above $200 from customers whose historical return rate exceeds 25 percent to prevent friendly fraud and repeated policy abuse before fulfillment proceeds.",
+    "action": "flag",
+    "active": true
+  },
+  {
+    "policy_id": "expedited-high-risk",
+    "domain": "ecommerce",
+    "collection": "orders",
+    "trigger": "insert",
+    "intent": "Investigate expedited shipments of high-value electronics when the customer account is new, under-verified, or behaviorally inconsistent with prior purchasing history.",
+    "action": "investigate",
+    "active": true
+  }
+]

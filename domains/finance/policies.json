@@ -1,0 +1,47 @@
+[
+  {
+    "policy_id": "high-value-kyc",
+    "collection": "transactions",
+    "trigger": "insert",
+    "intent": "Flag wire transfers over $100,000 from accounts with incomplete KYC verification for immediate compliance review",
+    "action": "investigate",
+    "active": true,
+    "domain": "finance"
+  },
+  {
+    "policy_id": "high-risk-jurisdiction",
+    "collection": "transactions",
+    "trigger": "insert",
+    "intent": "Escalate any transaction where either the originator or counterparty is in a high-risk jurisdiction like Cayman Islands or Panama",
+    "action": "escalate",
+    "active": true,
+    "domain": "finance"
+  },
+  {
+    "policy_id": "structuring-detection",
+    "collection": "transactions",
+    "trigger": "insert",
+    "intent": "Detect cash deposits or check deposits just below $10,000 that may indicate structuring to avoid CTR reporting thresholds",
+    "action": "flag",
+    "active": true,
+    "domain": "finance"
+  },
+  {
+    "policy_id": "velocity-alert",
+    "collection": "transactions",
+    "trigger": "insert",
+    "intent": "Flag accounts that receive more than 3 transactions within a single hour as potential velocity anomalies",
+    "action": "investigate",
+    "active": true,
+    "domain": "finance"
+  },
+  {
+    "policy_id": "round-trip-monitor",
+    "collection": "transactions",
+    "trigger": "insert",
+    "intent": "Identify transactions where funds appear to flow in a circular pattern back toward the originating account through intermediaries",
+    "action": "escalate",
+    "active": true,
+    "domain": "finance"
+  }
+]

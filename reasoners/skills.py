@@ -8,7 +8,7 @@ from pymongo import DESCENDING, MongoClient
 from .router import router
 
 
-_client: MongoClient | None = None
+_client: MongoClient[dict[str, Any]] | None = None
 _db = None
 
 
@@ -36,61 +36,45 @@ def _serialize(value: Any) -> Any:
 
 
 @router.skill()
-def enrich_document(collection: str, document_id: str, intelligence: dict) -> dict:
+def load_domain_config(domain: str) -> dict[str, Any]:
     db = _get_db()
-    enrichment = dict(intelligence)
-    enrichment["analyzed_at"] = datetime.now(timezone.utc)
-    enrichment["version"] = 1
-
-    existing = db[collection].find_one({"transaction_id": document_id})
-    if existing and existing.get("_intelligence"):
-        enrichment["version"] = existing["_intelligence"].get("version", 0) + 1
-
-    db[collection].update_one(
-        {"transaction_id": document_id},
-        {"$set": {"_intelligence": enrichment}},
-    )
-
-    return {"ok": True, "document_id": document_id, "enriched": True}
+    config = db["domain_config"].find_one({"domain": domain}, {"_id": 0})
+    return {"ok": True, "found": config is not None, "config": config}
 
 
 @router.skill()
-def load_active_policies(_: bool = True) -> dict:
+def load_entity_context(
+    entity_id: str, entity_collection: str, entity_id_field: str
+) -> dict[str, Any]:
     db = _get_db()
-    policies = list(db["policies"].find({"active": True}, {"_id": 0}))
-    return {"ok": True, "count": len(policies), "policies": policies}
+    entity = db[entity_collection].find_one({entity_id_field: entity_id}, {"_id": 0})
+    return {"ok": True, "found": entity is not None, "entity": entity}
 
 
 @router.skill()
-def lookup_account(account_id: str) -> dict:
+def find_related_documents(
+    collection: str,
+    match_field: str,
+    match_value: str,
+    limit: int = 50,
+) -> dict[str, Any]:
     db = _get_db()
-    account = db["accounts"].find_one({"account_id": account_id}, {"_id": 0})
-    return {"ok": True, "found": account is not None, "account": account}
+    query: dict[str, Any] = {match_field: match_value}
 
-
-@router.skill()
-def find_related_transactions(account_id: str, limit: int = 50) -> dict:
-    db = _get_db()
-    query = {
-        "$or": [
-            {"account_id": account_id},
-            {"counterparty_id": account_id},
-        ]
-    }
     docs = list(
-        db["transactions"]
+        db[collection]
         .find(query, {"_id": 0})
         .sort("timestamp", DESCENDING)
         .limit(int(limit))
     )
-    return {"ok": True, "count": len(docs), "transactions": _serialize(docs)}
+    return {"ok": True, "count": len(docs), "documents": _serialize(docs)}
 
 
 @router.skill()
-def load_compliance_rules(query: str, k: int = 5) -> dict:
+def load_rules(query: str, rules_collection: str, k: int = 6) -> dict[str, Any]:
     db = _get_db()
     docs = list(
-        db["compliance_rules"]
+        db[rules_collection]
         .find(
             {"$text": {"$search": query}},
             {"_id": 0, "score": {"$meta": "textScore"}},
@@ -102,15 +86,57 @@ def load_compliance_rules(query: str, k: int = 5) -> dict:
 
 
 @router.skill()
-def update_account_risk(account_id: str, risk_profile: str, reason: str) -> dict:
+def enrich_document(
+    collection: str,
+    id_field: str,
+    document_id: str,
+    intelligence: dict[str, Any],
+) -> dict[str, Any]:
     db = _get_db()
-    result = db["accounts"].update_one(
-        {"account_id": account_id},
+    enrichment = dict(intelligence)
+    enrichment["analyzed_at"] = datetime.now(timezone.utc)
+    enrichment["version"] = 1
+
+    existing = db[collection].find_one({id_field: document_id})
+    if existing and existing.get("_intelligence"):
+        enrichment["version"] = existing["_intelligence"].get("version", 0) + 1
+
+    db[collection].update_one(
+        {id_field: document_id},
+        {"$set": {"_intelligence": enrichment}},
+    )
+
+    return {"ok": True, "document_id": document_id, "enriched": True}
+
+
+@router.skill()
+def load_active_policies(domain: str) -> dict[str, Any]:
+    db = _get_db()
+    policies = list(db["policies"].find({"active": True, "domain": domain}, {"_id": 0}))
+    return {"ok": True, "count": len(policies), "policies": policies}
+
+
+@router.skill()
+def update_entity_risk(
+    entity_collection: str,
+    entity_id_field: str,
+    entity_id: str,
+    risk_profile: str,
+    reason: str,
+) -> dict[str, Any]:
+    db = _get_db()
+    current = db[entity_collection].find_one(
+        {entity_id_field: entity_id},
+        {"_id": 0, "risk_profile": 1},
+    )
+    previous = current.get("risk_profile") if current else None
+    result = db[entity_collection].update_one(
+        {entity_id_field: entity_id},
         {
             "$set": {
                 "risk_profile": risk_profile,
                 "_risk_update": {
-                    "previous_profile": None,
+                    "previous_profile": previous,
                     "new_profile": risk_profile,
                     "reason": reason,
                     "updated_at": datetime.now(timezone.utc),
@@ -127,7 +153,7 @@ def update_account_risk(account_id: str, risk_profile: str, reason: str) -> dict
 
 
 @router.skill()
-def log_reaction(event: dict) -> dict:
+def log_reaction(event: dict[str, Any]) -> dict[str, Any]:
     db = _get_db()
     payload = dict(event)
     payload["timestamp"] = datetime.now(timezone.utc)
@@ -137,7 +163,7 @@ def log_reaction(event: dict) -> dict:
 
 
 @router.skill()
-def get_timeline(limit: int = 20) -> dict:
+def get_timeline(limit: int = 20, _: bool = True) -> dict[str, Any]:
     db = _get_db()
     events = list(
         db["reaction_timeline"]

@@ -1,0 +1,293 @@
+{
+  "order": ["normal", "friendly-fraud", "velocity-abuse", "synthetic-identity", "high-value-mismatch"],
+  "scenarios": {
+    "normal": {
+      "title": "Normal Orders",
+      "description": "Three legitimate orders from established customers with stable purchase histories and consistent shipping details.",
+      "watch": [
+        "Risk scores should remain low with pattern_match set to none.",
+        "Address, payment, and purchase behavior should align with customer history."
+      ],
+      "documents": [
+        {
+          "order_id": "__AUTO__",
+          "customer_id": "cust_0003",
+          "items": [
+            {"product_id": "prod_001", "name": "Wireless Headphones", "category": "electronics", "quantity": 1, "unit_price": 79.99},
+            {"product_id": "prod_021", "name": "Yoga Mat Premium", "category": "fitness", "quantity": 1, "unit_price": 65.00}
+          ],
+          "amount": {"random": [120, 220]},
+          "currency": "USD",
+          "payment_method": "visa_1188",
+          "shipping_address": {"country": "US", "city": "Seattle", "zip": "98101"},
+          "billing_address": {"country": "US", "city": "Seattle", "zip": "98101"},
+          "shipping_method": "standard",
+          "narrative": "Routine mixed-category purchase from a long-term verified customer.",
+          "status": "pending",
+          "timestamp": "__NOW__"
+        },
+        {
+          "order_id": "__AUTO__",
+          "customer_id": "cust_0011",
+          "items": [
+            {"product_id": "prod_016", "name": "Skincare Set", "category": "beauty", "quantity": 2, "unit_price": 92.00},
+            {"product_id": "prod_029", "name": "Cookware Set", "category": "home", "quantity": 1, "unit_price": 279.00}
+          ],
+          "amount": {"random": [320, 520]},
+          "currency": "USD",
+          "payment_method": "paypal",
+          "shipping_address": {"country": "US", "city": "Portland", "zip": "97205"},
+          "billing_address": {"country": "US", "city": "Portland", "zip": "97205"},
+          "shipping_method": "standard",
+          "narrative": "Established customer placing a typical household and beauty replenishment order.",
+          "status": "pending",
+          "timestamp": "__NOW__"
+        },
+        {
+          "order_id": "__AUTO__",
+          "customer_id": "cust_0022",
+          "items": [
+            {"product_id": "prod_010", "name": "Espresso Machine", "category": "home", "quantity": 1, "unit_price": 349.00}
+          ],
+          "amount": {"random": [300, 420]},
+          "currency": "USD",
+          "payment_method": "mastercard_4761",
+          "shipping_address": {"country": "DE", "city": "Munich", "zip": "80331"},
+          "billing_address": {"country": "DE", "city": "Munich", "zip": "80331"},
+          "shipping_method": "standard",
+          "narrative": "Normal premium home appliance order with consistent account signals.",
+          "status": "pending",
+          "timestamp": "__NOW__"
+        }
+      ]
+    },
+    "friendly-fraud": {
+      "title": "Friendly Fraud / Return Abuse",
+      "description": "Three expensive orders from a customer with a known high return rate and elevated abuse risk profile.",
+      "watch": [
+        "Look for RETURNS-001 and RETURNS-002 signals tied to customer history.",
+        "Evaluate whether high-value repeat purchases are consistent with prior return behavior."
+      ],
+      "documents": [
+        {
+          "order_id": "__AUTO__",
+          "customer_id": "cust_0038",
+          "items": [
+            {"product_id": "prod_004", "name": "Smartphone Pro 256GB", "category": "electronics", "quantity": 1, "unit_price": 999.00}
+          ],
+          "amount": {"random": [950, 1200]},
+          "currency": "USD",
+          "payment_method": "visa_8080",
+          "shipping_address": {"country": "US", "city": "Sacramento", "zip": "95814"},
+          "billing_address": {"country": "US", "city": "Sacramento", "zip": "95814"},
+          "shipping_method": "standard",
+          "narrative": "Repeat high-value electronics purchase from a customer with frequent historical returns.",
+          "status": "pending",
+          "timestamp": "__NOW__"
+        },
+        {
+          "order_id": "__AUTO__",
+          "customer_id": "cust_0038",
+          "items": [
+            {"product_id": "prod_012", "name": "Designer Handbag", "category": "fashion", "quantity": 1, "unit_price": 890.00},
+            {"product_id": "prod_015", "name": "Sunglasses", "category": "fashion", "quantity": 1, "unit_price": 199.00}
+          ],
+          "amount": {"random": [980, 1250]},
+          "currency": "USD",
+          "payment_method": "paypal",
+          "shipping_address": {"country": "US", "city": "Sacramento", "zip": "95814"},
+          "billing_address": {"country": "US", "city": "Sacramento", "zip": "95814"},
+          "shipping_method": "express",
+          "narrative": "Designer goods order that resembles prior wardrobing-like purchase cycles.",
+          "status": "pending",
+          "timestamp": "__NOW__"
+        },
+        {
+          "order_id": "__AUTO__",
+          "customer_id": "cust_0038",
+          "items": [
+            {"product_id": "prod_014", "name": "Luxury Watch", "category": "fashion", "quantity": 1, "unit_price": 1250.00}
+          ],
+          "amount": {"random": [1180, 1450]},
+          "currency": "USD",
+          "payment_method": "visa_8080",
+          "shipping_address": {"country": "US", "city": "Sacramento", "zip": "95814"},
+          "billing_address": {"country": "US", "city": "Sacramento", "zip": "95814"},
+          "shipping_method": "standard",
+          "narrative": "Another premium fashion order likely to stress return abuse controls.",
+          "status": "pending",
+          "timestamp": "__NOW__"
+        }
+      ]
+    },
+    "velocity-abuse": {
+      "title": "Velocity Abuse / Account Takeover Pattern",
+      "description": "Five rapid orders from the same customer with expedited shipping and rotating delivery destinations.",
+      "watch": [
+        "Detect VELOCITY-001 and VELOCITY-002 burst behavior from a single account.",
+        "Look for SHIPPING-002 style address rotation and possible takeover indicators."
+      ],
+      "documents": [
+        {
+          "order_id": "__AUTO__",
+          "customer_id": "cust_0031",
+          "items": [
+            {"product_id": "prod_027", "name": "Noise Cancelling Earbuds", "category": "electronics", "quantity": 1, "unit_price": 229.00}
+          ],
+          "amount": {"random": [180, 260]},
+          "currency": "USD",
+          "payment_method": "visa_2001",
+          "shipping_address": {"country": "US", "city": "Detroit", "zip": "48201"},
+          "billing_address": {"country": "US", "city": "Detroit", "zip": "48201"},
+          "shipping_method": "expedited",
+          "narrative": "First order in a rapid sequence with expedited fulfillment.",
+          "status": "pending",
+          "timestamp": "__NOW__"
+        },
+        {
+          "order_id": "__AUTO__",
+          "customer_id": "cust_0031",
+          "items": [
+            {"product_id": "prod_030", "name": "Portable SSD 2TB", "category": "electronics", "quantity": 1, "unit_price": 189.00}
+          ],
+          "amount": {"random": [140, 220]},
+          "currency": "USD",
+          "payment_method": "visa_2001",
+          "shipping_address": {"country": "US", "city": "Cleveland", "zip": "44114"},
+          "billing_address": {"country": "US", "city": "Detroit", "zip": "48201"},
+          "shipping_method": "expedited",
+          "narrative": "Second order shortly after checkout with changed destination city.",
+          "status": "pending",
+          "timestamp": "__NOW__"
+        },
+        {
+          "order_id": "__AUTO__",
+          "customer_id": "cust_0031",
+          "items": [
+            {"product_id": "prod_001", "name": "Wireless Headphones", "category": "electronics", "quantity": 1, "unit_price": 79.99},
+            {"product_id": "prod_002", "name": "Bluetooth Speaker", "category": "electronics", "quantity": 1, "unit_price": 59.99}
+          ],
+          "amount": {"random": [120, 200]},
+          "currency": "USD",
+          "payment_method": "paypal",
+          "shipping_address": {"country": "US", "city": "Pittsburgh", "zip": "15222"},
+          "billing_address": {"country": "US", "city": "Detroit", "zip": "48201"},
+          "shipping_method": "expedited",
+          "narrative": "Third order introduces a payment method shift and another shipping destination.",
+          "status": "pending",
+          "timestamp": "__NOW__"
+        },
+        {
+          "order_id": "__AUTO__",
+          "customer_id": "cust_0031",
+          "items": [
+            {"product_id": "prod_023", "name": "Gift Card $100", "category": "gift_card", "quantity": 1, "unit_price": 100.00}
+          ],
+          "amount": {"random": [90, 140]},
+          "currency": "USD",
+          "payment_method": "visa_2001",
+          "shipping_address": {"country": "US", "city": "Columbus", "zip": "43215"},
+          "billing_address": {"country": "US", "city": "Detroit", "zip": "48201"},
+          "shipping_method": "expedited",
+          "narrative": "Fourth order targets quick-conversion digital value with rotated address.",
+          "status": "pending",
+          "timestamp": "__NOW__"
+        },
+        {
+          "order_id": "__AUTO__",
+          "customer_id": "cust_0031",
+          "items": [
+            {"product_id": "prod_028", "name": "Baby Monitor", "category": "home", "quantity": 1, "unit_price": 159.00}
+          ],
+          "amount": {"random": [130, 210]},
+          "currency": "USD",
+          "payment_method": "visa_2001",
+          "shipping_address": {"country": "US", "city": "Buffalo", "zip": "14202"},
+          "billing_address": {"country": "US", "city": "Detroit", "zip": "48201"},
+          "shipping_method": "expedited",
+          "narrative": "Fifth order completes the classic rapid-fire compromise sequence.",
+          "status": "pending",
+          "timestamp": "__NOW__"
+        }
+      ]
+    },
+    "synthetic-identity": {
+      "title": "Synthetic Identity Signals",
+      "description": "Two high-value orders from very new and weakly verified accounts with mismatched billing and shipping details.",
+      "watch": [
+        "Look for IDENTITY-001, IDENTITY-002, SHIPPING-001, and PAYMENT-002 combinations.",
+        "Expect elevated risk driven by account age, verification gaps, and category risk."
+      ],
+      "documents": [
+        {
+          "order_id": "__AUTO__",
+          "customer_id": "cust_0034",
+          "items": [
+            {"product_id": "prod_025", "name": "Drone Quadcopter", "category": "electronics", "quantity": 1, "unit_price": 699.00},
+            {"product_id": "prod_027", "name": "Noise Cancelling Earbuds", "category": "electronics", "quantity": 1, "unit_price": 229.00}
+          ],
+          "amount": {"random": [850, 1250]},
+          "currency": "USD",
+          "payment_method": "visa_9902",
+          "shipping_address": {"country": "US", "city": "Newark", "zip": "07102"},
+          "billing_address": {"country": "US", "city": "Jersey City", "zip": "07302"},
+          "shipping_method": "express",
+          "narrative": "Very new account placing high-value electronics order with mismatched location details.",
+          "status": "pending",
+          "timestamp": "__NOW__"
+        },
+        {
+          "order_id": "__AUTO__",
+          "customer_id": "cust_0036",
+          "items": [
+            {"product_id": "prod_005", "name": "Gaming Laptop 15-inch", "category": "electronics", "quantity": 1, "unit_price": 1499.00}
+          ],
+          "amount": {"random": [1300, 1700]},
+          "currency": "USD",
+          "payment_method": {"choice": ["crypto", "mastercard_7740"]},
+          "shipping_address": {"country": "GB", "city": "London", "zip": "EC1A"},
+          "billing_address": {"country": "DE", "city": "Frankfurt", "zip": "60311"},
+          "shipping_method": "expedited",
+          "narrative": "Brand-new account with cross-border mismatch and an unfamiliar payment pattern.",
+          "status": "pending",
+          "timestamp": "__NOW__"
+        }
+      ]
+    },
+    "high-value-mismatch": {
+      "title": "High-Value Cross-Border Mismatch",
+      "description": "One large suspicious electronics order with expedited shipping and a country mismatch between billing and delivery.",
+      "watch": [
+        "Assess AMOUNT-001, SHIPPING-001, and GEOGRAPHIC-001 alignment.",
+        "This should resemble a high-priority manual review candidate."
+      ],
+      "documents": [
+        {
+          "order_id": "__AUTO__",
+          "customer_id": "cust_0030",
+          "items": [
+            {"product_id": "prod_004", "name": "Smartphone Pro 256GB", "category": "electronics", "quantity": 1, "unit_price": 999.00},
+            {"product_id": "prod_026", "name": "Tablet 11-inch", "category": "electronics", "quantity": 1, "unit_price": 549.00}
+          ],
+          "amount": {"random": [800, 2000]},
+          "currency": "USD",
+          "payment_method": "mastercard_5524",
+          "shipping_address": {"country": "DE", "city": "Berlin", "zip": "10115"},
+          "billing_address": {"country": "GB", "city": "Birmingham", "zip": "B1 1BB"},
+          "shipping_method": "expedited",
+          "narrative": "Large electronics order from a relatively new account with cross-country address mismatch.",
+          "status": "pending",
+          "timestamp": "__NOW__"
+        }
+      ]
+    }
+  },
+  "custom_template": {
+    "customer_id": "cust_0012",
+    "currency": "USD",
+    "payment_method": "visa_4242",
+    "shipping_method": "standard",
+    "billing_address": {"country": "US", "city": "Unknown"},
+    "status": "pending"
+  }
+}

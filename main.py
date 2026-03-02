@@ -2,9 +2,11 @@ import os
 
 from agentfield import Agent, AIConfig
 
+DOMAIN = os.getenv("DOMAIN", "finance")
+
 app = Agent(
     node_id="reactive-intelligence",
-    agentfield_server=os.getenv("AGENTFIELD_SERVER"),
+    agentfield_server=os.getenv("AGENTFIELD_SERVER", ""),
     ai_config=AIConfig(
         model=os.getenv("AI_MODEL", "openrouter/minimax/minimax-m2.5"),
     ),

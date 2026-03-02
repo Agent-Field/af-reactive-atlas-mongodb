@@ -1,66 +1,133 @@
+# pyright: reportImportCycles=false
+
 import asyncio
 import json
+from typing import Any
+
+from models import CascadeResult, DocumentIntelligence, PolicyEvaluationList
 
 from .router import router
-from models import (
-    DocumentIntelligence,
-    PolicyEvaluationList,
-    CascadeResult,
-)
+
+
+def _build_rule_query(document: dict[str, Any]) -> str:
+    geo = document.get("geolocation") or document.get("shipping_address") or {}
+    items = document.get("items", [])
+    categories = " ".join(
+        str(item.get("category", "")) for item in items if isinstance(item, dict)
+    )
+    parts = [
+        str(document.get("type", "")),
+        str(document.get("amount", "")),
+        str(geo.get("country", "")) if isinstance(geo, dict) else "",
+        str(document.get("narrative", "")),
+        categories,
+        str(document.get("shipping_method", "")),
+    ]
+    return " ".join(p for p in parts if p).strip()
 
 
 @router.reasoner()
-async def analyze_document(document: dict, collection: str = "transactions") -> dict:
-    account_id = document.get("account_id")
+async def analyze_document(
+    document: dict[str, Any],
+    domain_config: dict[str, Any],
+) -> dict[str, Any]:
+    context_loading = domain_config.get("context_loading", {})
+    entity_lookup_field = context_loading.get("entity_lookup_field")
+    history_collection = context_loading.get("history_collection")
+    history_match_fields = context_loading.get("history_match_fields", [])
+    history_limit = int(context_loading.get("history_limit", 50))
+    entity_collection = domain_config.get("entity_collection")
+    entity_id_field = domain_config.get("entity_id_field")
+    rules_collection = domain_config.get("rules_collection")
 
-    account_result, rules_result = await asyncio.gather(
-        router.app.call("reactive-intelligence.lookup_account", account_id=account_id),
-        router.app.call(
-            "reactive-intelligence.load_compliance_rules",
-            query=f"{document.get('type', '')} {document.get('amount', '')} {document.get('geolocation', {}).get('country', '')}",
-            k=6,
-        ),
+    entity_id = document.get(entity_lookup_field) if entity_lookup_field else None
+
+    entity_task = router.app.call(
+        "reactive-intelligence.load_entity_context",
+        entity_id=str(entity_id) if entity_id is not None else "",
+        entity_collection=entity_collection,
+        entity_id_field=entity_id_field,
+    )
+    rules_task = router.app.call(
+        "reactive-intelligence.load_rules",
+        query=_build_rule_query(document),
+        rules_collection=rules_collection,
+        k=6,
     )
 
-    account = account_result.get("account", {})
+    related_tasks: list[Any] = []
+    for field_name in history_match_fields:
+        value = document.get(field_name)
+        if value is not None and history_collection:
+            related_tasks.append(
+                router.app.call(
+                    "reactive-intelligence.find_related_documents",
+                    collection=history_collection,
+                    match_field=field_name,
+                    match_value=str(value),
+                    limit=history_limit,
+                )
+            )
+
+    gathered = await asyncio.gather(entity_task, rules_task, *related_tasks)
+    entity_result = gathered[0]
+    rules_result = gathered[1]
+    related_results = gathered[2:]
+
+    entity = entity_result.get("entity", {})
     rules = rules_result.get("rules", [])
 
-    intelligence = await router.ai(
-        f"""Analyze this financial transaction and generate a risk intelligence assessment.
+    related_documents_map: dict[str, dict[str, Any]] = {}
+    doc_id_field = domain_config.get("document_id_field")
+    for result in related_results:
+        for related_doc in result.get("documents", []):
+            key = related_doc.get(doc_id_field) if doc_id_field else None
+            if key:
+                related_documents_map[str(key)] = related_doc
 
-Transaction:
+    related_documents = list(related_documents_map.values())
+
+    intelligence = await router.ai(
+        f"""{domain_config.get("analysis_prompt", "Analyze this document for risk.")}
+
+Domain:
+{json.dumps({"domain": domain_config.get("domain"), "display_name": domain_config.get("display_name")}, indent=2)}
+
+Document:
 {json.dumps(document, indent=2, default=str)}
 
-Account context:
-{json.dumps(account, indent=2, default=str)}
+Primary entity context:
+{json.dumps(entity, indent=2, default=str)}
 
-Applicable compliance rules:
+Related history:
+{json.dumps(related_documents, indent=2, default=str)}
+
+Applicable rules:
 {json.dumps(rules, indent=2, default=str)}
 
-Evaluate risk based on: amount relative to account type, jurisdiction risk, transaction pattern,
-KYC status of the account, counterparty exposure, and compliance rule applicability.
-Be specific with compliance_flags — cite exact rule IDs from the rules provided.
-If no suspicious pattern is detected, set pattern_match to "none" and risk_score below 0.3.""",
-        schema=DocumentIntelligence,
-    )
+Expected enrichment schema:
+{json.dumps(domain_config.get("enrichment_schema", {}), indent=2)}
 
-    router.note(
-        f"Analyzed {document.get('transaction_id', 'unknown')}: risk={intelligence.risk_score} category={intelligence.risk_category}",
-        tags=["analyze_document"],
+Return a structured assessment with realistic confidence and clear rationale.""",
+        schema=DocumentIntelligence,
     )
 
     return intelligence.model_dump()
 
 
 @router.reasoner()
-async def evaluate_policies(document: dict, intelligence: dict, policies: list) -> dict:
+async def evaluate_policies(
+    document: dict[str, Any],
+    intelligence: dict[str, Any],
+    policies: list[dict[str, Any]],
+) -> dict[str, Any]:
     if not policies:
         return {"evaluations": [], "any_triggered": False}
 
     result = await router.ai(
-        f"""Evaluate this transaction against each policy using judgment, not literal string matching.
+        f"""Evaluate this document against each policy using judgment, not literal string matching.
 
-Transaction:
+Document:
 {json.dumps(document, indent=2, default=str)}
 
 Intelligence assessment:
@@ -69,9 +136,9 @@ Intelligence assessment:
 Active policies:
 {json.dumps(policies, indent=2, default=str)}
 
-For each policy, determine if the transaction's characteristics match the policy's intent.
-Use the intelligence assessment (risk_score, pattern_match, compliance_flags) to inform your judgment.
-A policy triggers when the transaction meaningfully matches the intent, not just on keyword overlap.
+For each policy, determine if the document's characteristics match the policy's intent.
+Use the intelligence assessment (risk_score, pattern_match, flags) to inform your judgment.
+A policy triggers when the document meaningfully matches the intent, not just on keyword overlap.
 Return one evaluation per policy in the evaluations list.""",
         schema=PolicyEvaluationList,
     )
@@ -79,121 +146,147 @@ Return one evaluation per policy in the evaluations list.""",
     evaluations = [e.model_dump() for e in result.evaluations]
     any_triggered = any(e["triggered"] for e in evaluations)
 
-    router.note(
-        f"Policy evaluation: {sum(1 for e in evaluations if e['triggered'])}/{len(evaluations)} triggered",
-        tags=["evaluate_policies"],
-    )
-
     return {"evaluations": evaluations, "any_triggered": any_triggered}
 
 
 @router.reasoner()
-async def cascade(document: dict, intelligence: dict) -> dict:
-    account_id = document.get("account_id")
-    counterparty_id = document.get("counterparty_id")
-    risk_score = intelligence.get("risk_score", 0)
+async def cascade(
+    document: dict[str, Any],
+    intelligence: dict[str, Any],
+    domain_config: dict[str, Any],
+) -> dict[str, Any]:
+    cascade_config = domain_config.get("cascade_config", {})
+    context_loading = domain_config.get("context_loading", {})
 
-    account_updates = []
-    reenriched_count = 0
+    entity_collection = domain_config.get("entity_collection")
+    entity_id_field = domain_config.get("entity_id_field")
+    document_collection = domain_config.get("document_collection")
+    document_id_field = domain_config.get("document_id_field")
 
-    if risk_score >= 0.7 and account_id:
-        await router.app.call(
-            "reactive-intelligence.update_account_risk",
-            account_id=account_id,
-            risk_profile="high" if risk_score >= 0.8 else "medium",
-            reason=f"Transaction {document.get('transaction_id')} scored {risk_score}",
-        )
-        account_updates.append(account_id)
+    entity_lookup_field = context_loading.get("entity_lookup_field")
+    counterparty_field = context_loading.get("counterparty_field")
+    history_collection = context_loading.get("history_collection", document_collection)
 
-        related_result = await router.app.call(
-            "reactive-intelligence.find_related_transactions",
-            account_id=account_id,
-            limit=20,
-        )
-        related = related_result.get("transactions", [])
+    risk_score = float(intelligence.get("risk_score", 0))
+    risk_threshold = float(cascade_config.get("risk_threshold", 0.7))
+    ct_raw = cascade_config.get("counterparty_threshold")
+    counterparty_threshold = float(ct_raw) if ct_raw is not None else float("inf")
+    update_entities = bool(cascade_config.get("update_entities", True))
+    reenrich_related = bool(cascade_config.get("reenrich_related", True))
+    max_reenrich = int(cascade_config.get("max_reenrich", 10))
 
-        unenriched = [
-            t
-            for t in related
-            if not t.get("_intelligence")
-            and t.get("transaction_id") != document.get("transaction_id")
-        ]
+    entity_updates: list[str] = []
+    documents_reenriched = 0
+    trigger_doc_id = (
+        document.get(document_id_field) if isinstance(document_id_field, str) else None
+    )
 
-        if unenriched:
-            enrich_tasks = [_enrich_single(t) for t in unenriched[:10]]
-            results = await asyncio.gather(*enrich_tasks, return_exceptions=True)
-            reenriched_count += sum(1 for r in results if not isinstance(r, Exception))
+    entity_lookup_key = (
+        entity_lookup_field if isinstance(entity_lookup_field, str) else None
+    )
+    counterparty_key = (
+        counterparty_field if isinstance(counterparty_field, str) else None
+    )
+    doc_id_key = document_id_field if isinstance(document_id_field, str) else None
 
-    if risk_score >= 0.8 and counterparty_id:
-        await router.app.call(
-            "reactive-intelligence.update_account_risk",
-            account_id=counterparty_id,
-            risk_profile="high",
-            reason=f"Counterparty to high-risk transaction {document.get('transaction_id')}",
-        )
-        if counterparty_id not in account_updates:
-            account_updates.append(counterparty_id)
-
-        cp_related_result = await router.app.call(
-            "reactive-intelligence.find_related_transactions",
-            account_id=counterparty_id,
-            limit=10,
-        )
-        cp_related = cp_related_result.get("transactions", [])
-        cp_unenriched = [
-            t
-            for t in cp_related
-            if not t.get("_intelligence")
-            and t.get("transaction_id") != document.get("transaction_id")
-        ]
-
-        if cp_unenriched:
-            cp_tasks = [_enrich_single(t) for t in cp_unenriched[:10]]
-            cp_results = await asyncio.gather(*cp_tasks, return_exceptions=True)
-            reenriched_count += sum(
-                1 for r in cp_results if not isinstance(r, Exception)
+    if risk_score >= risk_threshold and update_entities and entity_lookup_key:
+        entity_id = document.get(entity_lookup_key)
+        if entity_id is not None:
+            await router.app.call(
+                "reactive-intelligence.update_entity_risk",
+                entity_collection=entity_collection,
+                entity_id_field=entity_id_field,
+                entity_id=str(entity_id),
+                risk_profile="high" if risk_score >= 0.8 else "medium",
+                reason=f"Document {trigger_doc_id} scored {risk_score}",
             )
+            entity_updates.append(str(entity_id))
 
-    total_affected = len(account_updates) + reenriched_count + 1
+        if reenrich_related and entity_id is not None:
+            related_result = await router.app.call(
+                "reactive-intelligence.find_related_documents",
+                collection=history_collection,
+                match_field=entity_lookup_key,
+                match_value=str(entity_id),
+                limit=max_reenrich * 2,
+            )
+            related = related_result.get("documents", [])
+            unenriched = [
+                d
+                for d in related
+                if not d.get("_intelligence")
+                and (d.get(doc_id_key) if doc_id_key else None) != trigger_doc_id
+            ]
+            if unenriched:
+                tasks = [
+                    _enrich_single(d, domain_config) for d in unenriched[:max_reenrich]
+                ]
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                documents_reenriched += sum(
+                    1 for result in results if not isinstance(result, Exception)
+                )
 
-    cascade_summary = await router.ai(
-        f"""Summarize what happened in this cascade reaction.
+    if (
+        risk_score >= counterparty_threshold
+        and update_entities
+        and counterparty_key
+        and document.get(counterparty_key) is not None
+    ):
+        counterparty_id = str(document.get(counterparty_key))
+        await router.app.call(
+            "reactive-intelligence.update_entity_risk",
+            entity_collection=entity_collection,
+            entity_id_field=entity_id_field,
+            entity_id=counterparty_id,
+            risk_profile="high",
+            reason=f"Counterparty to high-risk document {trigger_doc_id}",
+        )
+        if counterparty_id not in entity_updates:
+            entity_updates.append(counterparty_id)
 
-Trigger: Transaction {document.get("transaction_id")} scored risk {risk_score}.
-Account updates: {account_updates}
-Related transactions re-enriched: {reenriched_count}
-Total documents affected: {total_affected}
-
-Write one paragraph describing the chain of reactions.""",
-        schema=CascadeResult,
+    documents_affected = 1 + len(entity_updates) + documents_reenriched
+    summary = (
+        f"Cascade for {trigger_doc_id} updated {len(entity_updates)} entities "
+        f"and re-enriched {documents_reenriched} related documents."
     )
 
-    router.note(
-        f"Cascade complete: {total_affected} documents affected, {len(account_updates)} accounts updated",
-        tags=["cascade"],
+    result = CascadeResult(
+        documents_affected=documents_affected,
+        entity_updates=entity_updates,
+        documents_reenriched=documents_reenriched,
+        summary=summary,
     )
 
-    return cascade_summary.model_dump()
+    return result.model_dump()
 
 
-async def _enrich_single(transaction: dict) -> dict:
+async def _enrich_single(
+    document: dict[str, Any],
+    domain_config: dict[str, Any],
+) -> dict[str, Any]:
+    doc_collection = domain_config.get("document_collection")
+    doc_id_field = domain_config.get("document_id_field")
+    doc_id = document.get(doc_id_field) if isinstance(doc_id_field, str) else None
+
     analysis = await router.app.call(
         "reactive-intelligence.analyze_document",
-        document=transaction,
-        collection="transactions",
+        document=document,
+        domain_config=domain_config,
     )
     await router.app.call(
         "reactive-intelligence.enrich_document",
-        collection="transactions",
-        document_id=transaction["transaction_id"],
+        collection=doc_collection,
+        id_field=doc_id_field,
+        document_id=str(doc_id),
         intelligence=analysis,
     )
     await router.app.call(
         "reactive-intelligence.log_reaction",
         event={
             "trigger_type": "cascade_reenrich",
-            "document_id": transaction["transaction_id"],
-            "collection": "transactions",
+            "document_id": doc_id,
+            "collection": doc_collection,
+            "domain": domain_config.get("domain"),
             "risk_score": analysis.get("risk_score"),
             "risk_category": analysis.get("risk_category"),
             "cascade_depth": 1,
@@ -203,33 +296,42 @@ async def _enrich_single(transaction: dict) -> dict:
 
 
 @router.reasoner()
-async def process_document(document: dict, collection: str = "transactions") -> dict:
-    """Main entry point — called by Atlas Trigger for each new document.
+async def process_document(
+    document: dict[str, Any],
+    collection: str,
+    domain: str = "finance",
+) -> dict[str, Any]:
+    config_result = await router.app.call(
+        "reactive-intelligence.load_domain_config",
+        domain=domain,
+    )
+    domain_config = config_result.get("config")
+    if not domain_config:
+        raise ValueError(f"Domain config not found for domain={domain}")
 
-    Pipeline: analyze → enrich → evaluate policies → cascade if high risk → log.
-    """
-    doc_id = document.get("transaction_id", "unknown")
+    doc_id_field = domain_config.get("document_id_field", "id")
+    doc_id = document.get(doc_id_field, "unknown")
 
     if document.get("_intelligence"):
         return {"skipped": True, "reason": "already enriched", "document_id": doc_id}
 
-    router.note(f"Processing {doc_id}", tags=["process_document", "start"])
-
     analysis = await router.app.call(
         "reactive-intelligence.analyze_document",
         document=document,
-        collection=collection,
+        domain_config=domain_config,
     )
 
     await router.app.call(
         "reactive-intelligence.enrich_document",
         collection=collection,
-        document_id=doc_id,
+        id_field=doc_id_field,
+        document_id=str(doc_id),
         intelligence=analysis,
     )
 
     policies_result = await router.app.call(
-        "reactive-intelligence.load_active_policies", _=True
+        "reactive-intelligence.load_active_policies",
+        domain=domain,
     )
     policies = policies_result.get("policies", [])
 
@@ -239,24 +341,27 @@ async def process_document(document: dict, collection: str = "transactions") -> 
         intelligence=analysis,
         policies=policies,
     )
-
     triggered_policies = [
         e for e in policy_result.get("evaluations", []) if e.get("triggered")
     ]
 
     cascade_result = None
-    risk_score = analysis.get("risk_score", 0)
-    if risk_score >= 0.7:
+    risk_score = float(analysis.get("risk_score", 0))
+    if risk_score >= float(
+        domain_config.get("cascade_config", {}).get("risk_threshold", 0.7)
+    ):
         cascade_result = await router.app.call(
             "reactive-intelligence.cascade",
             document=document,
             intelligence=analysis,
+            domain_config=domain_config,
         )
 
     await router.app.call(
         "reactive-intelligence.log_reaction",
         event={
             "trigger_type": "atlas_trigger",
+            "domain": domain,
             "document_id": doc_id,
             "collection": collection,
             "risk_score": risk_score,
@@ -266,12 +371,8 @@ async def process_document(document: dict, collection: str = "transactions") -> 
         },
     )
 
-    router.note(
-        f"Completed {doc_id}: risk={risk_score} policies={len(triggered_policies)} cascade={'yes' if cascade_result else 'no'}",
-        tags=["process_document", "complete"],
-    )
-
     return {
+        "domain": domain,
         "document_id": doc_id,
         "risk_score": risk_score,
         "risk_category": analysis.get("risk_category"),

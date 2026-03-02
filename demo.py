@@ -1,114 +1,32 @@
 #!/usr/bin/env python3
-"""Reactive Atlas demo runner.
+"""Reactive Atlas domain demo runner.
 
 Usage:
-    python3 demo.py clean
-    python3 demo.py structuring
-    python3 demo.py round-trip
-    python3 demo.py layering
-    python3 demo.py big-one
-    python3 demo.py custom --amount 50000 --country KY --type wire_transfer --narrative "Consulting fees"
-    python3 demo.py all
-    python3 demo.py reset
-    python3 demo.py status
+    python3 demo.py list
+    python3 demo.py finance clean
+    python3 demo.py finance all
+    python3 demo.py finance reset
+    python3 demo.py finance status
+    python3 demo.py finance custom --amount 50000 --country KY --type wire_transfer --narrative "Consulting fees"
 """
 
 import argparse
+import json
 import os
 import random
 import sys
 import time
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 import httpx
 from pymongo import MongoClient
 
-SCENARIO_ORDER = ["clean", "structuring", "round-trip", "layering", "big-one"]
-SCENARIO_INFO = {
-    "clean": {
-        "title": "Clean Business Transactions",
-        "description": "Three normal transactions with realistic narratives and amounts.",
-        "watch": [
-            "Risk scores should stay low for all three transactions.",
-            "Pattern match should stay at none.",
-            "No compliance flags should be present.",
-        ],
-    },
-    "structuring": {
-        "title": "Structuring Pattern",
-        "description": "Five cash deposits from one account, all just under the $10K CTR threshold.",
-        "watch": [
-            "Pattern detection should identify structuring or smurfing behavior.",
-            "Risk should climb as repeated below-threshold deposits accumulate.",
-            "Compliance flags should reference structuring related rules.",
-        ],
-    },
-    "round-trip": {
-        "title": "Round-Trip Flow",
-        "description": "Three-hop circular transfer A->B->C->A with decreasing amounts.",
-        "watch": [
-            "Pattern detection should identify circular money flow.",
-            "Narrative summary should mention round-tripping behavior.",
-            "Related accounts may receive risk updates from cascade.",
-        ],
-    },
-    "layering": {
-        "title": "Layering Across Jurisdictions",
-        "description": "Four SWIFT hops US->HK->KY->CH with slight value decay at each hop.",
-        "watch": [
-            "Pattern detection should identify layering behavior.",
-            "High-risk jurisdiction rules should fire on the KY hop.",
-            "Cascade can propagate risk to linked accounts and activity.",
-        ],
-    },
-    "big-one": {
-        "title": "Single High-Risk Wire",
-        "description": "One large pending-review SWIFT wire from Cayman Islands.",
-        "watch": [
-            "Risk score should be elevated into high or critical territory.",
-            "Compliance flags should include high-value and jurisdiction signals.",
-            "Policies and cascade actions should be visible in reaction_timeline.",
-        ],
-    },
-    "custom": {
-        "title": "Custom Transaction",
-        "description": "One user-defined transaction injected with custom parameters.",
-        "watch": [
-            "Confirm _intelligence appears on the inserted document.",
-            "Review risk score, pattern match, and compliance flags.",
-            "Check reaction_timeline for policy evaluation and cascade activity.",
-        ],
-    },
-}
 
-LEGIT_NARRATIVES = [
-    "Invoice settlement for quarterly logistics services",
-    "Enterprise software annual license renewal",
-    "Regional office operating expense transfer",
-    "Vendor payment for managed infrastructure support",
-    "Professional services retainer payment",
-    "Procurement payment for approved hardware order",
-]
-
-STRUCTURING_NARRATIVES = [
-    "Cash deposit from daily branch activity",
-    "Cash deposit for local operations",
-    "Cash receipt settlement",
-]
-
-ROUND_TRIP_NARRATIVES = [
-    "Investment allocation transfer",
-    "Intercompany treasury adjustment",
-    "Portfolio balancing transfer",
-]
-
-LAYERING_NARRATIVES = [
-    "Cross-border settlement transfer",
-    "Strategic reserve movement",
-    "Liquidity routing transfer",
-    "Offshore vehicle funding movement",
-]
+BASE_DIR = Path(__file__).resolve().parent
+DOMAINS_DIR = BASE_DIR / "domains"
 
 
 def require_env(name: str) -> str:
@@ -129,163 +47,107 @@ def get_agentfield_url() -> str:
     return os.getenv("AGENTFIELD_URL", "http://localhost:8092").rstrip("/")
 
 
-def new_transaction_id(prefix: str) -> str:
+def load_json(path: Path) -> Any:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def list_domains() -> list[str]:
+    if not DOMAINS_DIR.exists():
+        return []
+    domains = []
+    for entry in DOMAINS_DIR.iterdir():
+        if (
+            entry.is_dir()
+            and (entry / "config.json").exists()
+            and (entry / "scenarios.json").exists()
+        ):
+            domains.append(entry.name)
+    return sorted(domains)
+
+
+def load_domain_files(domain: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    domain_dir = DOMAINS_DIR / domain
+    if not domain_dir.exists():
+        raise SystemExit(f"Unknown domain '{domain}'. Run `python3 demo.py list`.")
+    config_path = domain_dir / "config.json"
+    scenarios_path = domain_dir / "scenarios.json"
+    if not config_path.exists() or not scenarios_path.exists():
+        raise SystemExit(f"Domain '{domain}' is missing config.json or scenarios.json")
+    return load_json(config_path), load_json(scenarios_path)
+
+
+def print_ui_urls():
+    print(f"  AgentField UI: {get_agentfield_url()}")
+    print("  Atlas UI:      https://cloud.mongodb.com")
+
+
+def new_document_id(prefix: str) -> str:
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
     return f"{prefix}_{timestamp}_{uuid4().hex[:8]}"
 
 
-def random_amount(low: float, high: float) -> float:
-    return round(random.uniform(low, high), 2)
+def _resolve_value(value: Any, id_prefix: str) -> Any:
+    if isinstance(value, str):
+        if value == "__AUTO__":
+            return new_document_id(id_prefix)
+        if value == "__NOW__":
+            return datetime.now(timezone.utc)
+        return value
+    if isinstance(value, dict):
+        if "random" in value:
+            low, high = value["random"]
+            return round(random.uniform(float(low), float(high)), 2)
+        if "choice" in value:
+            options = value["choice"]
+            return random.choice(options)
+        return {k: _resolve_value(v, id_prefix) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_resolve_value(v, id_prefix) for v in value]
+    return value
 
 
-def create_scenario_transactions(scenario_name: str):
-    now = datetime.now(timezone.utc)
+def build_documents_for_scenario(
+    domain: str,
+    config: dict[str, Any],
+    scenario: dict[str, Any],
+) -> list[dict[str, Any]]:
+    id_prefix = f"{domain[:5]}_doc"
+    docs = []
+    for template in scenario.get("documents", []):
+        docs.append(_resolve_value(template, id_prefix))
 
-    if scenario_name == "clean":
-        pairs = [
-            ("acc_0005", "acc_0010"),
-            ("acc_0018", "acc_0022"),
-            ("acc_0033", "acc_0007"),
-        ]
-        currencies = ["USD", "EUR", "GBP"]
-        geos = [("US", "Chicago"), ("DE", "Berlin"), ("GB", "London")]
-        types = ["ach", "wire_transfer", "ach"]
-        channels = ["online_banking", "api", "api"]
-        txns = []
-        for idx in range(3):
-            txns.append(
-                {
-                    "transaction_id": new_transaction_id("txn_clean"),
-                    "account_id": pairs[idx][0],
-                    "counterparty_id": pairs[idx][1],
-                    "amount": random_amount(1000, 20000),
-                    "currency": currencies[idx],
-                    "type": types[idx],
-                    "channel": channels[idx],
-                    "geolocation": {"country": geos[idx][0], "city": geos[idx][1]},
-                    "narrative": random.choice(LEGIT_NARRATIVES),
-                    "status": "completed",
-                    "timestamp": now,
-                }
-            )
-        return txns
-
-    if scenario_name == "structuring":
-        txns = []
-        for _ in range(5):
-            txns.append(
-                {
-                    "transaction_id": new_transaction_id("txn_struct"),
-                    "account_id": "acc_0028",
-                    "counterparty_id": "acc_0028",
-                    "amount": random_amount(9100, 9950),
-                    "currency": "USD",
-                    "type": "cash_deposit",
-                    "channel": "branch",
-                    "geolocation": {"country": "US", "city": "Miami"},
-                    "narrative": random.choice(STRUCTURING_NARRATIVES),
-                    "status": "completed",
-                    "timestamp": now,
-                }
-            )
-        return txns
-
-    if scenario_name == "round-trip":
-        accounts = ["acc_0015", "acc_0025", "acc_0035", "acc_0015"]
-        geos = [("CH", "Zurich"), ("HK", "Hong Kong"), ("SG", "Singapore")]
-        current_amount = random_amount(120000, 220000)
-        txns = []
-        for idx in range(3):
-            txns.append(
-                {
-                    "transaction_id": new_transaction_id("txn_round"),
-                    "account_id": accounts[idx],
-                    "counterparty_id": accounts[idx + 1],
-                    "amount": round(current_amount, 2),
-                    "currency": "USD",
-                    "type": "wire_transfer",
-                    "channel": "swift",
-                    "geolocation": {"country": geos[idx][0], "city": geos[idx][1]},
-                    "narrative": ROUND_TRIP_NARRATIVES[idx],
-                    "status": "completed",
-                    "timestamp": now,
-                }
-            )
-            current_amount *= 1 - random.uniform(0.005, 0.02)
-        return txns
-
-    if scenario_name == "layering":
-        accounts = ["acc_0003", "acc_0019", "acc_0038", "acc_0046", "acc_0009"]
-        geos = [
-            ("US", "New York"),
-            ("HK", "Hong Kong"),
-            ("KY", "George Town"),
-            ("CH", "Geneva"),
-        ]
-        current_amount = random_amount(180000, 320000)
-        txns = []
-        for idx in range(4):
-            txns.append(
-                {
-                    "transaction_id": new_transaction_id("txn_layer"),
-                    "account_id": accounts[idx],
-                    "counterparty_id": accounts[idx + 1],
-                    "amount": round(current_amount, 2),
-                    "currency": "USD",
-                    "type": "wire_transfer",
-                    "channel": "swift",
-                    "geolocation": {"country": geos[idx][0], "city": geos[idx][1]},
-                    "narrative": LAYERING_NARRATIVES[idx],
-                    "status": "completed",
-                    "timestamp": now,
-                }
-            )
-            current_amount *= 1 - random.uniform(0.003, 0.015)
-        return txns
-
-    if scenario_name == "big-one":
-        return [
-            {
-                "transaction_id": new_transaction_id("txn_big"),
-                "account_id": "acc_0042",
-                "counterparty_id": "acc_0049",
-                "amount": random_amount(500000, 1200000),
-                "currency": "USD",
-                "type": "wire_transfer",
-                "channel": "swift",
-                "geolocation": {"country": "KY", "city": "George Town"},
-                "narrative": "Consulting fees - offshore vehicle administration",
-                "status": "pending_review",
-                "timestamp": now,
-            }
-        ]
-
-    raise ValueError(f"Unsupported scenario: {scenario_name}")
+    doc_id_field = config.get("document_id_field")
+    for doc in docs:
+        if doc_id_field and not doc.get(doc_id_field):
+            doc[doc_id_field] = new_document_id(id_prefix)
+        if not doc.get("timestamp"):
+            doc["timestamp"] = datetime.now(timezone.utc)
+    return docs
 
 
-def wait_for_enrichment(db, transaction_ids):
+def wait_for_enrichment(db, collection: str, id_field: str, document_ids: list[str]):
     poll_seconds = 3
-    timeout_seconds = max(30, len(transaction_ids) * 15)
+    timeout_seconds = max(30, len(document_ids) * 15)
     spinner = "|/-\\"
     start = time.time()
     tick = 0
 
     while True:
         elapsed = int(time.time() - start)
-        enriched = db.transactions.count_documents(
+        enriched = db[collection].count_documents(
             {
-                "transaction_id": {"$in": transaction_ids},
+                id_field: {"$in": document_ids},
                 "_intelligence": {"$exists": True},
             }
         )
         spin = spinner[tick % len(spinner)]
         sys.stdout.write(
-            f"\r  {spin} waiting for enrichment {enriched}/{len(transaction_ids)} elapsed {elapsed}s"
+            f"\r  {spin} waiting for enrichment {enriched}/{len(document_ids)} elapsed {elapsed}s"
         )
         sys.stdout.flush()
 
-        if enriched == len(transaction_ids):
-            print("\r  done: all transactions enriched" + " " * 30)
+        if enriched == len(document_ids):
+            print("\r  done: all documents enriched" + " " * 30)
             return
         if elapsed >= timeout_seconds:
             print("\r  timeout reached before all documents were enriched" + " " * 10)
@@ -295,99 +157,118 @@ def wait_for_enrichment(db, transaction_ids):
         time.sleep(poll_seconds)
 
 
-def print_ui_urls():
-    print(f"  AgentField UI: {get_agentfield_url()}")
-    print("  Atlas UI:      https://cloud.mongodb.com")
-
-
-def trigger_processing(transaction):
-    doc = {k: v for k, v in transaction.items() if k != "_id"}
-    doc["timestamp"] = doc["timestamp"].isoformat()
+def trigger_processing(
+    document: dict[str, Any],
+    collection: str,
+    domain: str,
+) -> str:
+    payload_doc = {k: v for k, v in document.items() if k != "_id"}
+    if isinstance(payload_doc.get("timestamp"), datetime):
+        payload_doc["timestamp"] = payload_doc["timestamp"].isoformat()
 
     response = httpx.post(
         f"{get_agentfield_url()}/api/v1/execute/async/reactive-intelligence.process_document",
-        json={"input": {"document": doc, "collection": "transactions"}},
+        json={
+            "input": {
+                "document": payload_doc,
+                "collection": collection,
+                "domain": domain,
+            }
+        },
         timeout=10,
     )
     response.raise_for_status()
-    payload = response.json()
-    return payload.get("execution_id", "?")
+    body = response.json()
+    return body.get("execution_id", "?")
 
 
-def show_results(db, transactions):
-    for txn in transactions:
-        doc = db.transactions.find_one(
-            {"transaction_id": txn["transaction_id"]},
-            {
-                "_id": 0,
-                "transaction_id": 1,
-                "amount": 1,
-                "geolocation": 1,
-                "_intelligence": 1,
-            },
+def show_results(db, config: dict[str, Any], documents: list[dict[str, Any]]) -> None:
+    collection = config["document_collection"]
+    id_field = config["document_id_field"]
+
+    for input_doc in documents:
+        doc = db[collection].find_one(
+            {id_field: input_doc[id_field]},
+            {"_id": 0},
         )
-        intel = doc.get("_intelligence") if doc else None
-        if not intel:
-            print(f"  pending {txn['transaction_id']}")
+        intelligence = doc.get("_intelligence") if doc else None
+        if not intelligence:
+            print(f"  pending {input_doc[id_field]}")
             continue
 
-        print(
-            f"  {doc['transaction_id']} amount=${doc['amount']:,.2f} country={doc.get('geolocation', {}).get('country', '??')}"
+        amount = doc.get("amount")
+        # Support both finance (geolocation.country) and ecommerce (shipping_address.country)
+        geo = doc.get("geolocation") or doc.get("shipping_address") or {}
+        country = geo.get("country", "??") if isinstance(geo, dict) else "??"
+        amount_label = (
+            f"${amount:,.2f}" if isinstance(amount, (int, float)) else str(amount)
         )
+        print(f"  {doc[id_field]} amount={amount_label} country={country}")
         print(
-            f"    risk={intel.get('risk_score', 0):.2f} category={intel.get('risk_category', '?')} pattern={intel.get('pattern_match', 'none')}"
+            f"    risk={float(intelligence.get('risk_score', 0)):.2f} category={intelligence.get('risk_category', '?')} pattern={intelligence.get('pattern_match', 'none')}"
         )
-        flags = intel.get("compliance_flags", [])
+        flags = intelligence.get("flags", [])
         if flags:
             print(f"    flags={', '.join(flags)}")
-        summary = intel.get("summary", "")
+        summary = intelligence.get("summary", "")
         if summary:
             print(f"    summary={summary[:140]}{'...' if len(summary) > 140 else ''}")
 
 
-def inject_and_process(db, scenario_name, transactions=None):
-    info = SCENARIO_INFO[scenario_name]
-    txns = (
-        transactions
-        if transactions is not None
-        else create_scenario_transactions(scenario_name)
-    )
+def inject_and_process(
+    db,
+    domain: str,
+    config: dict[str, Any],
+    scenario_name: str,
+    scenario_info: dict[str, Any],
+    documents: list[dict[str, Any]],
+) -> None:
+    collection = config["document_collection"]
+    id_field = config["document_id_field"]
 
     print(f"\n{'=' * 60}")
-    print(f"  Scenario: {info['title']}")
+    print(f"  Domain: {domain}")
+    print(f"  Scenario: {scenario_info.get('title', scenario_name)}")
     print(f"{'=' * 60}")
-    print(f"  {info['description']}\n")
+    print(f"  {scenario_info.get('description', '')}\n")
 
-    for txn in txns:
-        db.transactions.insert_one(txn.copy())
-        geo = txn.get("geolocation", {}) if isinstance(txn, dict) else {}
+    for doc in documents:
+        db[collection].insert_one(doc.copy())
+        geo = doc.get("geolocation") or doc.get("shipping_address") or {}
         country = geo.get("country", "??") if isinstance(geo, dict) else "??"
+        amount = doc.get("amount")
+        amount_label = (
+            f"${amount:,.2f}" if isinstance(amount, (int, float)) else str(amount)
+        )
+        doc_type = doc.get("type") or doc.get("shipping_method") or "?"
         print(
-            f"  inserted {txn['transaction_id']} amount=${txn['amount']:,.2f} type={txn['type']} country={country}"
+            f"  inserted {doc[id_field]} amount={amount_label} type={doc_type} country={country}"
         )
 
     execution_ids = []
     print("\n  submitting to AgentField process_document endpoint...")
-    for txn in txns:
+    for doc in documents:
         try:
-            execution_id = trigger_processing(txn)
+            execution_id = trigger_processing(doc, collection, domain)
             execution_ids.append(execution_id)
-            print(f"    ok {txn['transaction_id']} execution={execution_id}")
+            print(f"    ok {doc[id_field]} execution={execution_id}")
         except Exception as exc:
-            print(f"    failed {txn['transaction_id']} error={exc}")
+            print(f"    failed {doc[id_field]} error={exc}")
 
     print("\n  waiting for AI enrichment...")
-    wait_for_enrichment(db, [txn["transaction_id"] for txn in txns])
+    wait_for_enrichment(db, collection, id_field, [d[id_field] for d in documents])
 
     print("\n  results")
-    show_results(db, txns)
+    show_results(db, config, documents)
 
+    entity_collection = config["entity_collection"]
+    entity_id_field = config["entity_id_field"]
     cascaded = list(
-        db.accounts.find(
+        db[entity_collection].find(
             {"_risk_update": {"$exists": True}},
             {
                 "_id": 0,
-                "account_id": 1,
+                entity_id_field: 1,
                 "account_name": 1,
                 "risk_profile": 1,
                 "_risk_update.reason": 1,
@@ -395,14 +276,14 @@ def inject_and_process(db, scenario_name, transactions=None):
         )
     )
     if cascaded:
-        print(f"\n  cascade updates ({len(cascaded)} accounts)")
-        for account in cascaded:
+        print(f"\n  cascade updates ({len(cascaded)} entities)")
+        for entity in cascaded:
             print(
-                f"    {account['account_id']} {account.get('account_name', '')} risk={account.get('risk_profile', '?')}"
+                f"    {entity.get(entity_id_field)} {entity.get('account_name', '')} risk={entity.get('risk_profile', '?')}"
             )
 
     timeline = list(
-        db.reaction_timeline.find({}, {"_id": 0}).sort("timestamp", -1).limit(8)
+        db["reaction_timeline"].find({}, {"_id": 0}).sort("timestamp", -1).limit(8)
     )
     if timeline:
         print(f"\n  reaction_timeline ({len(timeline)} latest)")
@@ -415,9 +296,11 @@ def inject_and_process(db, scenario_name, transactions=None):
                 f"    {ts_label} {event.get('trigger_type', '')} {event.get('document_id', '')} risk={event.get('risk_score', '?')}"
             )
 
-    print("\n  what to look for")
-    for item in info["watch"]:
-        print(f"    - {item}")
+    watch_items = scenario_info.get("watch", [])
+    if watch_items:
+        print("\n  what to look for")
+        for item in watch_items:
+            print(f"    - {item}")
 
     if execution_ids:
         print("\n  execution links")
@@ -429,104 +312,203 @@ def inject_and_process(db, scenario_name, transactions=None):
     print()
 
 
-def build_custom_transaction(args):
-    return {
-        "transaction_id": new_transaction_id("txn_custom"),
-        "account_id": args.account_id,
-        "counterparty_id": args.counterparty_id,
-        "amount": round(args.amount, 2),
-        "currency": args.currency,
-        "type": args.txn_type,
-        "channel": args.channel,
-        "geolocation": {"country": args.country, "city": args.city},
-        "narrative": args.narrative,
-        "status": args.status,
-        "timestamp": datetime.now(timezone.utc),
-    }
+def reset_domain_data(db, config: dict[str, Any]) -> None:
+    collection = config["document_collection"]
+    id_field = config["document_id_field"]
+    context_loading = config.get("context_loading", {})
 
-
-def reset(db):
     print("\nresetting demo data...")
-    db.transactions.drop()
-    db.reaction_timeline.drop()
-    db.accounts.update_many({}, {"$unset": {"_risk_update": ""}})
-    db.transactions.create_index("transaction_id", unique=True)
-    db.transactions.create_index("account_id")
-    db.transactions.create_index("counterparty_id")
-    db.transactions.create_index("status")
-    db.transactions.create_index("timestamp")
-    db.transactions.create_index(
+    db[collection].drop()
+    db["reaction_timeline"].drop()
+    db[config["entity_collection"]].update_many({}, {"$unset": {"_risk_update": ""}})
+
+    db[collection].create_index(id_field, unique=True)
+    if context_loading.get("entity_lookup_field"):
+        db[collection].create_index(context_loading["entity_lookup_field"])
+    if context_loading.get("counterparty_field"):
+        db[collection].create_index(context_loading["counterparty_field"])
+    db[collection].create_index("status")
+    db[collection].create_index("timestamp")
+    db[collection].create_index(
         [("_intelligence.risk_score", -1)],
         partialFilterExpression={"_intelligence": {"$exists": True}},
     )
-    db.reaction_timeline.create_index("timestamp")
+    db["reaction_timeline"].create_index("timestamp")
     print("reset complete. base data preserved.\n")
 
 
-def status(db):
-    total = db.transactions.count_documents({})
-    enriched = db.transactions.count_documents({"_intelligence": {"$exists": True}})
-    high_risk = db.transactions.count_documents(
-        {"_intelligence.risk_score": {"$gte": 0.7}}
+def status(db, domain: str, config: dict[str, Any]) -> None:
+    collection = config["document_collection"]
+    threshold = float(config.get("cascade_config", {}).get("risk_threshold", 0.7))
+    total = db[collection].count_documents({})
+    enriched = db[collection].count_documents({"_intelligence": {"$exists": True}})
+    high_risk = db[collection].count_documents(
+        {"_intelligence.risk_score": {"$gte": threshold}}
     )
-    cascaded = db.accounts.count_documents({"_risk_update": {"$exists": True}})
-    reactions = db.reaction_timeline.count_documents({})
+    cascaded = db[config["entity_collection"]].count_documents(
+        {"_risk_update": {"$exists": True}}
+    )
+    reactions = db["reaction_timeline"].count_documents({"domain": domain})
 
-    print("\nreactive atlas status")
-    print(f"  transactions:       {total}")
+    print(f"\nreactive atlas status ({domain})")
+    print(f"  documents:          {total}")
     print(f"  enriched:           {enriched}/{total}")
-    print(f"  high risk >= 0.7:   {high_risk}")
-    print(f"  cascaded accounts:  {cascaded}")
+    print(f"  high risk >= {threshold}: {high_risk}")
+    print(f"  cascaded entities:  {cascaded}")
     print(f"  timeline events:    {reactions}\n")
 
 
-def build_parser():
+def build_custom_document(
+    args,
+    config: dict[str, Any],
+    scenarios: dict[str, Any],
+) -> dict[str, Any]:
+    defaults = scenarios.get("custom_template", {})
+    context_loading = config.get("context_loading", {})
+    entity_field = context_loading.get(
+        "entity_lookup_field", config.get("entity_id_field")
+    )
+    counterparty_field = context_loading.get("counterparty_field")
+    id_field = config.get("document_id_field")
+
+    doc = dict(defaults)
+    if id_field:
+        doc[id_field] = new_document_id(f"{args.domain[:5]}_custom")
+    if entity_field:
+        doc[entity_field] = args.account_id or defaults.get(entity_field)
+    if counterparty_field:
+        doc[counterparty_field] = args.counterparty_id or defaults.get(
+            counterparty_field
+        )
+
+    if args.amount is not None:
+        doc["amount"] = round(args.amount, 2)
+    if args.currency:
+        doc["currency"] = args.currency
+    if args.doc_type:
+        doc["type"] = args.doc_type
+    if args.channel:
+        doc["channel"] = args.channel
+    if args.narrative:
+        doc["narrative"] = args.narrative
+    if args.status:
+        doc["status"] = args.status
+
+    raw_geo = doc.get("geolocation")
+    geolocation: dict[str, object] = dict(raw_geo) if isinstance(raw_geo, dict) else {}
+    if args.country:
+        geolocation["country"] = args.country
+    if args.city:
+        geolocation["city"] = args.city
+    if geolocation:
+        doc["geolocation"] = geolocation
+
+    doc["timestamp"] = datetime.now(timezone.utc)
+    return doc
+
+
+def show_domain_list():
+    domains = list_domains()
+    if not domains:
+        print("No domains found under domains/")
+        return
+
+    print("Available domains and scenarios:\n")
+    for domain in domains:
+        _, scenarios = load_domain_files(domain)
+        order = scenarios.get("order", [])
+        print(f"- {domain}: {', '.join(order)}")
+
+
+def parse_args():
     parser = argparse.ArgumentParser(description="Reactive Atlas demo runner")
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    parser.add_argument("domain", help="Domain name, or 'list'")
+    parser.add_argument("command", nargs="?", help="Scenario name or command")
 
-    for command in SCENARIO_ORDER + ["all", "reset", "status"]:
-        subparsers.add_parser(command)
-
-    custom = subparsers.add_parser("custom")
-    custom.add_argument("--amount", type=float, required=True)
-    custom.add_argument("--country", required=True)
-    custom.add_argument("--type", dest="txn_type", required=True)
-    custom.add_argument("--narrative", required=True)
-    custom.add_argument("--account-id", default="acc_0012")
-    custom.add_argument("--counterparty-id", default="acc_0030")
-    custom.add_argument("--currency", default="USD")
-    custom.add_argument("--channel", default="api")
-    custom.add_argument("--city", default="Unknown")
-    custom.add_argument("--status", default="completed")
-    return parser
+    parser.add_argument("--amount", type=float)
+    parser.add_argument("--country")
+    parser.add_argument("--type", dest="doc_type")
+    parser.add_argument("--narrative")
+    parser.add_argument("--account-id")
+    parser.add_argument("--counterparty-id")
+    parser.add_argument("--currency")
+    parser.add_argument("--channel")
+    parser.add_argument("--city")
+    parser.add_argument("--status")
+    return parser.parse_args()
 
 
 def main():
-    parser = build_parser()
-    args = parser.parse_args()
+    args = parse_args()
+    if args.domain == "list":
+        show_domain_list()
+        return
+
+    if not args.command:
+        raise SystemExit("Command required. Example: python3 demo.py finance clean")
+
+    config, scenarios_doc = load_domain_files(args.domain)
+    scenario_order = scenarios_doc.get("order", [])
+    scenario_map = scenarios_doc.get("scenarios", {})
+
     db = get_db()
 
     if args.command == "reset":
-        reset(db)
+        reset_domain_data(db, config)
         return
     if args.command == "status":
-        status(db)
+        status(db, args.domain, config)
         return
     if args.command == "all":
-        reset(db)
-        for name in SCENARIO_ORDER:
-            inject_and_process(db, name)
+        reset_domain_data(db, config)
+        for scenario_name in scenario_order:
+            scenario_info = scenario_map.get(scenario_name, {})
+            documents = build_documents_for_scenario(args.domain, config, scenario_info)
+            inject_and_process(
+                db,
+                args.domain,
+                config,
+                scenario_name,
+                scenario_info,
+                documents,
+            )
         return
     if args.command == "custom":
-        custom_txn = build_custom_transaction(args)
+        custom_doc = build_custom_document(args, config, scenarios_doc)
         inject_and_process(
             db,
+            args.domain,
+            config,
             "custom",
-            transactions=[custom_txn],
+            {
+                "title": "Custom Document",
+                "description": "One user-defined document injected with custom parameters.",
+                "watch": [
+                    "Confirm _intelligence appears on the inserted document.",
+                    "Review risk score, pattern match, and flags.",
+                ],
+            },
+            [custom_doc],
         )
         return
 
-    inject_and_process(db, args.command)
+    if args.command not in scenario_map:
+        supported = scenario_order + ["all", "custom", "reset", "status"]
+        raise SystemExit(
+            f"Unsupported command '{args.command}' for domain '{args.domain}'. "
+            f"Supported: {', '.join(supported)}"
+        )
+
+    scenario_info = scenario_map[args.command]
+    documents = build_documents_for_scenario(args.domain, config, scenario_info)
+    inject_and_process(
+        db,
+        args.domain,
+        config,
+        args.command,
+        scenario_info,
+        documents,
+    )
 
 
 if __name__ == "__main__":

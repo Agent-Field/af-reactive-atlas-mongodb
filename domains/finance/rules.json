@@ -1,0 +1,142 @@
+[
+  {
+    "rule_id": "BSA-001",
+    "title": "Currency Transaction Report (CTR)",
+    "jurisdiction": "US",
+    "category": "reporting",
+    "description": "Financial institutions must file a CTR for cash transactions over $10,000 in one business day. Aggregated transactions that exceed the threshold for the same customer must also be reported."
+  },
+  {
+    "rule_id": "BSA-002",
+    "title": "Suspicious Activity Report (SAR)",
+    "jurisdiction": "US",
+    "category": "reporting",
+    "description": "A SAR is required when activity appears to involve illicit funds, evasion of BSA controls, or no clear lawful purpose. Institutions should file promptly and document rationale for escalation."
+  },
+  {
+    "rule_id": "BSA-003",
+    "title": "Structuring and Smurfing Detection",
+    "jurisdiction": "US",
+    "category": "detection",
+    "description": "Structuring occurs when deposits are split to avoid CTR thresholds, often just below $10,000. Repeated sub-threshold cash patterns over short windows should trigger enhanced review."
+  },
+  {
+    "rule_id": "FATF-001",
+    "title": "FATF Recommendation 10: CDD",
+    "jurisdiction": "international",
+    "category": "kyc",
+    "description": "Institutions must identify and verify customers, beneficial owners, and expected account purpose. Higher-risk relationships require enhanced due diligence and stronger ongoing monitoring."
+  },
+  {
+    "rule_id": "FATF-002",
+    "title": "FATF Recommendation 16: Wire Transfers",
+    "jurisdiction": "international",
+    "category": "wire",
+    "description": "Wire transfers must carry complete originator and beneficiary details to support traceability. Missing or inconsistent payment fields should be treated as compliance exceptions."
+  },
+  {
+    "rule_id": "FATF-003",
+    "title": "FATF High-Risk Jurisdictions Controls",
+    "jurisdiction": "international",
+    "category": "jurisdiction",
+    "description": "Transactions connected to high-risk jurisdictions require enhanced due diligence and stricter monitoring. Control frameworks should apply additional scrutiny to source of funds and counterparties."
+  },
+  {
+    "rule_id": "EU-5AMLD",
+    "title": "EU 5th Anti-Money Laundering Directive",
+    "jurisdiction": "EU",
+    "category": "aml",
+    "description": "5AMLD strengthens transparency on beneficial ownership and broadens AML obligations. Institutions should maintain robust risk-based controls and reporting discipline across member states."
+  },
+  {
+    "rule_id": "MAS-626",
+    "title": "MAS Notice 626",
+    "jurisdiction": "SG",
+    "category": "aml",
+    "description": "MAS Notice 626 requires Singapore banks to apply customer due diligence, screening, and suspicious transaction reporting. Enhanced controls are required for high-risk customers and cross-border payments."
+  },
+  {
+    "rule_id": "OFAC-SDN",
+    "title": "OFAC SDN Sanctions Screening",
+    "jurisdiction": "US",
+    "category": "sanctions",
+    "description": "US persons are prohibited from dealings with SDN-listed individuals and entities. Screening should include names, aliases, beneficial owners, and payment references before and after execution."
+  },
+  {
+    "rule_id": "LAYER-001",
+    "title": "Layering Pattern Detection",
+    "jurisdiction": "international",
+    "category": "detection",
+    "description": "Layering is characterized by rapid sequential transfers across multiple accounts to obscure provenance. Amount reductions, short intervals, and cross-border hops are common indicators."
+  },
+  {
+    "rule_id": "SMURF-001",
+    "title": "Smurfing Sequence Detection",
+    "jurisdiction": "international",
+    "category": "detection",
+    "description": "Smurfing relies on repeated small deposits made below reportable limits. Institutions should aggregate activity by account, branch, and related parties to reveal hidden structuring."
+  },
+  {
+    "rule_id": "VELOC-001",
+    "title": "Velocity Anomaly Detection",
+    "jurisdiction": "international",
+    "category": "detection",
+    "description": "Dormant or low-activity accounts that suddenly generate bursts of high-value transfers represent elevated risk. Velocity checks should compare recent behavior against account baseline."
+  },
+  {
+    "rule_id": "ROUND-001",
+    "title": "Round-Tripping Detection",
+    "jurisdiction": "international",
+    "category": "detection",
+    "description": "Round-tripping occurs when funds return to the originator through intermediary entities. Circular paths with similar values and tight timing windows require investigation."
+  },
+  {
+    "rule_id": "PEP-001",
+    "title": "PEP Enhanced Due Diligence",
+    "jurisdiction": "international",
+    "category": "kyc",
+    "description": "Politically exposed persons require stronger onboarding and periodic review controls. Institutions should verify source of wealth, source of funds, and maintain heightened monitoring."
+  },
+  {
+    "rule_id": "TRAVEL-001",
+    "title": "Wire Travel Rule Data Quality",
+    "jurisdiction": "international",
+    "category": "wire",
+    "description": "Payment messages must preserve complete transfer metadata through intermediaries. Missing payer or beneficiary fields should be blocked or routed for manual review."
+  },
+  {
+    "rule_id": "CORR-001",
+    "title": "Correspondent Banking Oversight",
+    "jurisdiction": "international",
+    "category": "kyc",
+    "description": "Correspondent relationships should be risk-rated with documented AML control assessments. Nested relationship exposure and unusual payment corridors require additional scrutiny."
+  },
+  {
+    "rule_id": "BENOWN-001",
+    "title": "Beneficial Ownership Transparency",
+    "jurisdiction": "international",
+    "category": "kyc",
+    "description": "Legal-entity customers must disclose and verify ultimate beneficial owners and control persons. Opaque ownership chains should trigger enhanced due diligence."
+  },
+  {
+    "rule_id": "SHELL-001",
+    "title": "Shell Entity Risk Indicators",
+    "jurisdiction": "international",
+    "category": "detection",
+    "description": "Shell entities can be used to mask origin and destination of funds in laundering schemes. Indicators include minimal operational footprint and disproportionate transaction value."
+  },
+  {
+    "rule_id": "TBML-001",
+    "title": "Trade-Based Money Laundering Signals",
+    "jurisdiction": "international",
+    "category": "detection",
+    "description": "TBML uses trade documents and pricing manipulation to move value illicitly. Over- or under-invoicing and inconsistent shipment patterns are common red flags."
+  },
+  {
+    "rule_id": "SANCTION-001",
+    "title": "Cross-Border Sanctions Escalation",
+    "jurisdiction": "international",
+    "category": "sanctions",
+    "description": "Cross-border transfers involving sanctioned regions or restricted sectors require immediate escalation. Screening logic should evaluate counterparty, ownership, and narrative context together."
+  }
+]

@@ -1,0 +1,36 @@
+{
+  "domain": "finance",
+  "display_name": "Financial Transaction Intelligence",
+  "description": "AML compliance and financial crime detection",
+  "document_collection": "transactions",
+  "document_id_field": "transaction_id",
+  "entity_collection": "accounts",
+  "entity_id_field": "account_id",
+  "rules_collection": "compliance_rules",
+  "context_loading": {
+    "entity_lookup_field": "account_id",
+    "counterparty_field": "counterparty_id",
+    "history_collection": "transactions",
+    "history_match_fields": [
+      "account_id",
+      "counterparty_id"
+    ],
+    "history_limit": 50
+  },
+  "enrichment_schema": {
+    "risk_score": "float 0.0-1.0 indicating overall risk",
+    "risk_category": "one of: low, medium, high, critical",
+    "pattern_match": "detected pattern name or 'none'",
+    "flags": "list of applicable rule IDs from the rules collection",
+    "summary": "2-3 sentence executive summary"
+  },
+  "cascade_config": {
+    "risk_threshold": 0.7,
+    "update_entities": true,
+    "reenrich_related": true,
+    "counterparty_threshold": 0.8,
+    "max_reenrich": 10
+  },
+  "analysis_prompt": "You are a financial crime analyst performing anti-money-laundering risk assessment for a banking transaction. Evaluate the transaction in context of account profile, jurisdiction exposure, transaction type, amount, and narrative quality. Consider whether activity fits known typologies such as structuring, layering, round-tripping, velocity abuse, sanctions evasion, or shell-entity movement. Weigh historical behavior and linked counterparty patterns when estimating risk. Use the provided rules as constraints and cite the most relevant rule IDs in flags when they materially apply. Keep risk scoring calibrated: clean routine behavior should remain low, while multi-signal suspicious behavior should be high or critical. Explain the key drivers in a concise executive summary that a compliance officer can act on. If no suspicious pattern is found, set pattern_match to none and keep risk proportionate.",
+  "policy_prompt": "Evaluate this document against each policy using judgment, not literal string matching."
+}

@@ -1,0 +1,35 @@
+{
+  "domain": "ecommerce",
+  "display_name": "E-Commerce Order Intelligence",
+  "description": "Fraud detection and risk assessment for online orders",
+  "document_collection": "orders",
+  "document_id_field": "order_id",
+  "entity_collection": "customers",
+  "entity_id_field": "customer_id",
+  "rules_collection": "fraud_rules",
+  "context_loading": {
+    "entity_lookup_field": "customer_id",
+    "counterparty_field": null,
+    "history_collection": "orders",
+    "history_match_fields": [
+      "customer_id"
+    ],
+    "history_limit": 30
+  },
+  "enrichment_schema": {
+    "risk_score": "float 0.0-1.0 indicating fraud probability",
+    "risk_category": "one of: low, medium, high, critical",
+    "pattern_match": "detected fraud pattern or 'none' (e.g. friendly_fraud, velocity_abuse, synthetic_identity, card_testing, account_takeover)",
+    "flags": "list of applicable fraud rule IDs from the fraud_rules collection",
+    "summary": "2-3 sentence fraud assessment"
+  },
+  "cascade_config": {
+    "risk_threshold": 0.7,
+    "update_entities": true,
+    "reenrich_related": true,
+    "counterparty_threshold": null,
+    "max_reenrich": 5
+  },
+  "analysis_prompt": "You are an e-commerce fraud analyst reviewing an incoming order for potential payment abuse, account compromise, or synthetic identity behavior. Evaluate whether the order amount is materially different from the customer's average order value and lifetime purchasing pattern. Compare shipping and billing details, and treat country-level or unusual city-level mismatches as elevated risk signals when combined with other anomalies. Factor in item category risk, especially high-resale electronics, gift cards, luxury goods, and expedited shipping combinations. Consider account age, verification state, and whether order velocity suggests card testing or takeover behavior within short time windows. Review payment method consistency and identify sudden switches to unfamiliar cards, crypto, or high-friction payment paths that differ from customer history. Use the fraud rules as evidence and cite exact rule IDs such as VELOCITY-001, IDENTITY-002, PAYMENT-001, SHIPPING-001, and AMOUNT-002 when relevant. If behavior appears consistent with legitimate history and no meaningful fraud indicators are present, set pattern_match to \"none\" and keep risk_score below 0.3. Only include precise, defensible flags and avoid broad or speculative tagging. Return output that strictly follows the enrichment schema with a calibrated risk score, categorical risk label, clear pattern match, exact rule flags, and a concise 2-3 sentence summary.",
+  "policy_prompt": "Evaluate this order against each policy using judgment. Consider the order details, customer history, and fraud signals. A policy triggers when the order meaningfully matches the policy intent."
+}

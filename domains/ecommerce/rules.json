@@ -1,0 +1,92 @@
+[
+  {
+    "rule_id": "VELOCITY-001",
+    "title": "Order Velocity Spike",
+    "category": "velocity",
+    "description": "Multiple orders placed in rapid succession from the same customer account, especially with different shipping addresses or expedited shipping, indicate potential fraud or account compromise. Compare order timing against the customer's normal cadence and flag sudden bursts that are inconsistent with historical behavior."
+  },
+  {
+    "rule_id": "VELOCITY-002",
+    "title": "Burst Checkout Pattern",
+    "category": "velocity",
+    "description": "A cluster of small or medium purchases within minutes can signal scripted checkout activity or stolen credential abuse. The risk increases when item mix appears opportunistic and transaction spacing is unnaturally regular."
+  },
+  {
+    "rule_id": "IDENTITY-001",
+    "title": "Synthetic Identity Signals",
+    "category": "identity",
+    "description": "Newly created accounts with sparse profile history, limited verification, and immediate high-value purchases are consistent with synthetic identity fraud. Evaluate whether identity attributes appear coherent across email, phone, address, and payment behavior."
+  },
+  {
+    "rule_id": "IDENTITY-002",
+    "title": "New Account High-Risk Purchase",
+    "category": "identity",
+    "description": "Accounts younger than 30 days making premium or easily resold purchases should receive additional scrutiny. Elevated concern applies when account maturity does not support the order amount or shipping urgency."
+  },
+  {
+    "rule_id": "PAYMENT-001",
+    "title": "Card Testing Pattern",
+    "category": "payment",
+    "description": "Fraud actors often run low-value transactions across multiple cards or retry the same order with slight payment changes to validate stolen credentials. Detect repeated payment attempts, partial declines, or unusual card churn in a short window."
+  },
+  {
+    "rule_id": "PAYMENT-002",
+    "title": "Unusual Payment Method Shift",
+    "category": "payment",
+    "description": "A sudden switch to a payment method not previously used by the customer, especially paired with a larger basket, can indicate account takeover. Weight this signal more heavily when combined with location or shipping anomalies."
+  },
+  {
+    "rule_id": "SHIPPING-001",
+    "title": "Billing and Shipping Mismatch",
+    "category": "shipping",
+    "description": "Material differences between billing and shipping country or region are a common fraud indicator for unauthorized purchases. Distinguish benign gifting from suspicious mismatch by checking order value, urgency, and customer history."
+  },
+  {
+    "rule_id": "SHIPPING-002",
+    "title": "Reshipping Network Behavior",
+    "category": "shipping",
+    "description": "Repeated delivery to freight forwarders, mail drops, or rotating recipient addresses suggests reshipping abuse. Risk increases when the same account alternates destinations across states or countries over a short time period."
+  },
+  {
+    "rule_id": "AMOUNT-001",
+    "title": "Order Value Anomaly",
+    "category": "amount",
+    "description": "An order amount significantly above the customer's typical spend profile can indicate unauthorized activity. Compare against average order value, historical maximums, and category norms before assigning severity."
+  },
+  {
+    "rule_id": "AMOUNT-002",
+    "title": "Gift Card Concentration Abuse",
+    "category": "amount",
+    "description": "High concentrations of gift cards or digital-value products are frequently targeted because they are quickly monetized and difficult to recover. Flag baskets dominated by gift cards, particularly from low-history or newly created accounts."
+  },
+  {
+    "rule_id": "RETURNS-001",
+    "title": "Friendly Fraud and Return Abuse",
+    "category": "returns",
+    "description": "Customers with persistent high return rates who continue placing expensive orders may be exploiting return policies or filing chargeback-style disputes. Review lifetime returns behavior and previous abuse indicators before fulfillment."
+  },
+  {
+    "rule_id": "RETURNS-002",
+    "title": "Wardrobing Pattern",
+    "category": "returns",
+    "description": "Wardrobing involves purchasing apparel or premium goods for short-term use and returning them repeatedly. Watch for cyclical buying and returning around weekends, events, or seasonal spikes."
+  },
+  {
+    "rule_id": "DEVICE-001",
+    "title": "Device Fingerprint Anomaly",
+    "category": "device",
+    "description": "Login and checkout from previously unseen device signatures, especially when coupled with payment or location changes, can indicate account takeover. Escalate when device anomalies align with rapid purchasing behavior."
+  },
+  {
+    "rule_id": "GEOGRAPHIC-001",
+    "title": "Geo Mismatch and Impossible Travel",
+    "category": "geographic",
+    "description": "Orders originating from locations inconsistent with recent customer activity may reflect compromised accounts or proxy usage. Treat impossible travel patterns and sudden cross-border shifts as high-signal events."
+  },
+  {
+    "rule_id": "BEHAVIORAL-001",
+    "title": "Unusual Browsing-to-Purchase Flow",
+    "category": "behavioral",
+    "description": "Fraudulent orders often skip normal browsing behavior and move directly from account access to checkout with little engagement. Fast add-to-cart and immediate purchase of high-resale items should be treated as behavioral risk."
+  }
+]

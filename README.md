@@ -7,7 +7,7 @@ Atlas Triggers detect changes. [AgentField](https://github.com/Agent-Field/agent
 [![AgentField](https://img.shields.io/badge/Powered%20by-AgentField-6366f1?style=flat-square)](https://github.com/Agent-Field/agentfield)
 [![MongoDB Atlas](https://img.shields.io/badge/MongoDB-Atlas-00ED64?style=flat-square&logo=mongodb&logoColor=white)](https://www.mongodb.com/atlas)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)](https://docs.docker.com/compose/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square)](LICENSE)
 
 ---
 
@@ -426,4 +426,4 @@ This is different from a chatbot — intelligence runs on database events and mu
 
 ## License
 
-MIT
+Apache 2.0

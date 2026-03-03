@@ -177,6 +177,38 @@ This pattern works anywhere documents arrive and need intelligent assessment. Th
 
 The "Why rules engines fail" column is the point. Every domain above has been attempted with static rules, and every one hits the same wall: **context-dependent judgment doesn't reduce to if-else**. That's what the LLM provides.
 
+### Economics
+
+Every document is assessed, enriched, and audited for less than a cent on budget models — under two cents on mid-tier. At 10,000 documents per day, total agent cost runs ~$400-600/mo. One compliance analyst reviewing 30-50 documents manually costs $6,000+/mo.
+
+The agent reads and writes to your existing Atlas collections — no new clusters, no ETL pipeline, no separate vector database.
+
+**Monthly agent cost** (assumes ~15% flag rate)
+
+| Documents/day | Budget model | Mid-tier model |
+|---|---|---|
+| 1,000 | ~$40 | ~$60 |
+| 10,000 | ~$400 | ~$600 |
+| 100,000 | ~$4,000 | ~$6,000 |
+
+Budget = MiniMax, Gemini Flash. Mid-tier = GPT-4o-mini.
+
+<details>
+<summary>Per-document cost breakdown</summary>
+
+Each document goes through 3 agent steps: triage, analysis, policy evaluation. Flagged documents trigger cascade — up to 14 total steps including network analysis and re-enrichment of related documents.
+
+| | Agent steps | Tokens | Budget | Mid-tier |
+|---|---|---|---|---|
+| Routine document | 3 | ~6K | < $0.01 | < $0.01 |
+| Flagged + cascade | up to 14 | ~40K | < $0.01 | ~$0.01 |
+
+Triage is a quick screen (~500 tokens). Analysis loads entity context, transaction history, counterparty data, and domain rules in parallel before reasoning (~3,500-12,000 tokens depending on investigation depth). Policy evaluation checks plain-English policies against the enrichment (~1,300 tokens). Cascade re-enriches up to 10 related documents and generates a network-level intelligence summary.
+
+At high volume, route triage through a budget model and send only flagged documents to a stronger model.
+
+</details>
+
 ### Shipped examples
 
 This repo ships two fully worked domains you can run right now:
@@ -393,29 +425,6 @@ This is different from a chatbot — intelligence runs on database events and mu
 | `MONGODB_DATABASE` | No | Database name (default: `reactive_intelligence`) |
 | `AI_MODEL` | No | LLM model ID (default: `openrouter/minimax/minimax-m2.5`) |
 | `AGENTFIELD_URL` | No | Local control plane URL (default: `http://localhost:8092`) |
-
----
-
-## Project structure
-
-```
-.
-├── main.py                  # Agent entry point
-├── models.py                # Pydantic models (DocumentIntelligence, PolicyEvaluation, CascadeResult)
-├── reasoners/
-│   ├── intelligence.py      # process_document reasoner + cascade logic
-│   ├── skills.py            # Generic MongoDB skill implementations
-│   └── router.py            # AgentField router setup
-├── domains/
-│   ├── finance/             # AML compliance: 50 accounts, 20 rules, 5 policies, 5 scenarios
-│   └── ecommerce/           # Order fraud: 40 customers, 15 rules, 5 policies, 5 scenarios
-├── setup/
-│   └── seed.py              # Generic seeder (reads from domains/)
-├── demo.py                  # Domain-aware demo runner
-├── docker-compose.yml
-├── Dockerfile
-└── .env.example
-```
 
 ---
 

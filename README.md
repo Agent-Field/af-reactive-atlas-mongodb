@@ -9,6 +9,8 @@ Atlas Triggers detect changes. [AgentField](https://github.com/Agent-Field/agent
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)](https://docs.docker.com/compose/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square)](LICENSE)
 
+![Every Collection Becomes Intelligent](architecture.png)
+
 ---
 
 ## See it in action

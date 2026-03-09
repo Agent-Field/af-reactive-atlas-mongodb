@@ -7,6 +7,7 @@ DOMAIN = os.getenv("DOMAIN", "finance")
 app = Agent(
     node_id="reactive-intelligence",
     agentfield_server=os.getenv("AGENTFIELD_SERVER", ""),
+    api_key=os.getenv("AGENTFIELD_API_KEY"),
     ai_config=AIConfig(
         model=os.getenv("AI_MODEL", "openrouter/minimax/minimax-m2.5"),
     ),

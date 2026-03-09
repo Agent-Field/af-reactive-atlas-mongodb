@@ -8,6 +8,7 @@ Atlas Triggers detect changes. [AgentField](https://github.com/Agent-Field/agent
 [![MongoDB Atlas](https://img.shields.io/badge/MongoDB-Atlas-00ED64?style=flat-square&logo=mongodb&logoColor=white)](https://www.mongodb.com/atlas)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)](https://docs.docker.com/compose/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square)](LICENSE)
+[![More from Agent-Field](https://img.shields.io/badge/More_from-Agent--Field-111827?style=flat-square&logo=github)](https://github.com/Agent-Field)
 
 ![Every Collection Becomes Intelligent](architecture.png)
 
@@ -157,6 +158,8 @@ Every field controls behavior:
 - **`rules_collection`** — which rules the AI reasons over (loaded via text search, not hardcoded)
 
 Change the config document in MongoDB and the AI behavior changes immediately. No code. No redeploy. A compliance team can tune their AML thresholds. A fraud team can adjust cascade sensitivity. A new domain can be live in 30 minutes.
+
+> **Same engine, different trigger:** [AF Deep Research](https://github.com/Agent-Field/af-deep-research) applies AgentField's multi-agent architecture to research — 10,000+ agent invocations per query with self-correcting loops.
 
 ---
 
@@ -435,6 +438,16 @@ This is different from a chatbot — intelligence runs on database events and mu
 
 ---
 
+### Also built on AgentField
+
+> **[AF Deep Research](https://github.com/Agent-Field/af-deep-research)** — Autonomous research backend. 10,000+ agent invocations per query with self-correcting loops.
+>
+> **[SEC-AF](https://github.com/Agent-Field/sec-af)** — AI-native security auditor. 250 agents per audit, 94% noise reduction, every finding proven exploitable.
+
+[All repos →](https://github.com/Agent-Field)
+
+---
+
 ## License
 
-Apache 2.0
+Apache 2.0 · [See what else we're building →](https://github.com/Agent-Field)

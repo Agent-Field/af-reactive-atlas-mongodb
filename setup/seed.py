@@ -81,6 +81,7 @@ def seed_domain(db, domain: str) -> None:
     policies = load_json(domain_dir / "policies.json")
 
     entity_collection = config["entity_collection"]
+    entity_id_field = config["entity_id_field"]
 
     # entities.json can be a flat list or a dict keyed by collection name
     if isinstance(entities_raw, list):
@@ -90,16 +91,10 @@ def seed_domain(db, domain: str) -> None:
     else:
         entities = []
     rules_collection = config["rules_collection"]
-    document_collection = config["document_collection"]
 
     print(f"\nSeeding domain: {domain}")
-    print("Dropping domain-specific collections...")
-    for coll in {entity_collection, rules_collection, document_collection}:
-        db[coll].drop()
+    print("Upserting config, entities, rules, and policies...")
 
-    db["policies"].delete_many({"domain": domain})
-
-    print("Writing config, entities, rules, and policies...")
     config["domain"] = domain
     db["domain_config"].update_one(
         {"domain": domain},
@@ -107,18 +102,31 @@ def seed_domain(db, domain: str) -> None:
         upsert=True,
     )
 
-    if entities:
-        db[entity_collection].insert_many(entities)
-    if rules:
-        db[rules_collection].insert_many(rules)
+    for entity in entities:
+        db[entity_collection].update_one(
+            {entity_id_field: entity[entity_id_field]},
+            {"$setOnInsert": entity},
+            upsert=True,
+        )
+
+    for rule in rules:
+        db[rules_collection].update_one(
+            {"rule_id": rule["rule_id"]},
+            {"$set": rule},
+            upsert=True,
+        )
 
     normalized_policies = []
     for policy in policies:
         item = dict(policy)
         item["domain"] = domain
         normalized_policies.append(item)
-    if normalized_policies:
-        db["policies"].insert_many(normalized_policies)
+    for policy in normalized_policies:
+        db["policies"].update_one(
+            {"domain": domain, "policy_id": policy["policy_id"]},
+            {"$set": policy},
+            upsert=True,
+        )
 
     create_indexes(db, config, entities, rules)
 

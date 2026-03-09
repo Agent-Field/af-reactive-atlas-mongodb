@@ -11,9 +11,7 @@ services:
     restart: unless-stopped
 
   reactive-intelligence:
-    build:
-      context: ..
-      dockerfile: reactive-atlas/Dockerfile
+    build: .
     env_file: .env
     environment:
       AGENTFIELD_SERVER: http://control-plane:8080

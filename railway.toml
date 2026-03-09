@@ -1,0 +1,8 @@
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "python setup/seed.py all && python main.py"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3

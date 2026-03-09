@@ -3,6 +3,6 @@ builder = "dockerfile"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "python setup/seed.py all && python main.py"
+startCommand = "bash -c 'python setup/seed.py all; echo Starting agent...; exec python -u main.py'"
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3

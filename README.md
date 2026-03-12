@@ -14,7 +14,13 @@ Atlas Triggers detect changes. [AgentField](https://github.com/Agent-Field/agent
 
 ---
 
-## See it in action
+## One-Call DX
+
+```bash
+curl -X POST http://localhost:8080/api/v1/execute/async/reactive-intelligence.process_document \
+  -H "Content-Type: application/json" \
+  -d '{"input": {"collection": "transactions", "document_id": "txn_20240315_a8f3"}}'
+```
 
 A cash deposit hits the `transactions` collection:
 

@@ -278,6 +278,18 @@ Add your collection to the Atlas Trigger's `domainMap` and you're live. The same
 
 ---
 
+## Quick Start
+
+```bash
+git clone https://github.com/Agent-Field/af-reactive-atlas-mongodb.git && cd af-reactive-atlas-mongodb
+cp .env.example .env          # Add OPENROUTER_API_KEY, MONGODB_URI
+docker compose up -d
+```
+
+Starts AgentField control plane (`http://localhost:8092`) + Reactive Intelligence agent.
+
+> Atlas Triggers require a public URL. See [Setup](#setup) below for tunnel + trigger configuration.
+
 ## Setup
 
 ### 1. Clone and configure

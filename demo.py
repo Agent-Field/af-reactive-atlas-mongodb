@@ -22,10 +22,12 @@ from typing import Any
 from uuid import uuid4
 
 import httpx
+from dotenv import load_dotenv
 from pymongo import MongoClient
 
-
 BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR / ".env")
+
 DOMAINS_DIR = BASE_DIR / "domains"
 
 

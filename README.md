@@ -16,6 +16,14 @@ Atlas Triggers detect changes. [AgentField](https://github.com/Agent-Field/agent
 
 ## One-Call DX
 
+Trigger it with the `af` CLI (requires af ≥ 0.1.86) — it streams live progress and prints the result:
+
+```bash
+af call reactive-intelligence.process_document --in '{"collection": "transactions", "document_id": "txn_20240315_a8f3"}'
+```
+
+Prefer raw HTTP? Hit the API directly with curl:
+
 ```bash
 curl -X POST http://localhost:8080/api/v1/execute/async/reactive-intelligence.process_document \
   -H "Content-Type: application/json" \

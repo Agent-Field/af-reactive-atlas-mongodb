@@ -16,10 +16,10 @@ Atlas Triggers detect changes. [AgentField](https://github.com/Agent-Field/agent
 
 ## One-Call DX
 
-Trigger it with the `af` CLI (requires af ≥ 0.1.86) — it streams live progress and prints the result:
+Trigger it with the `af` CLI (requires af ≥ 0.1.87) — it streams live progress and prints the result:
 
 ```bash
-af call reactive-intelligence.process_document --in '{"collection": "transactions", "document_id": "txn_20240315_a8f3"}'
+af call reactive-intelligence.process_document --in '{"collection": "transactions", "document": {"transaction_id": "txn_20240315_a8f3", "account_id": "acc_0028", "amount": 9800, "type": "cash_deposit", "channel": "branch", "narrative": "Cash deposit from daily operations", "status": "completed"}}'
 ```
 
 Prefer raw HTTP? Hit the API directly with curl:
@@ -27,7 +27,7 @@ Prefer raw HTTP? Hit the API directly with curl:
 ```bash
 curl -X POST http://localhost:8080/api/v1/execute/async/reactive-intelligence.process_document \
   -H "Content-Type: application/json" \
-  -d '{"input": {"collection": "transactions", "document_id": "txn_20240315_a8f3"}}'
+  -d '{"input": {"collection": "transactions", "document": {"transaction_id": "txn_20240315_a8f3", "account_id": "acc_0028", "amount": 9800, "type": "cash_deposit", "channel": "branch", "narrative": "Cash deposit from daily operations", "status": "completed"}}}'
 ```
 
 A cash deposit hits the `transactions` collection:
